@@ -409,6 +409,22 @@ function LibsTimePlayed:CreatePopup()
 	end)
 	window.streakButton = streakButton
 
+	-- Refresh button (to the left of streak toggle)
+	local refreshButton = LibAT.UI.CreateIconButton(controlFrame, 'uitools-icon-refresh', 'uitools-icon-refresh', 'uitools-icon-refresh')
+	refreshButton:SetPoint('RIGHT', streakButton, 'LEFT', -5, 2)
+	refreshButton:SetScript('OnClick', function()
+		RequestTimePlayed()
+	end)
+	refreshButton:SetScript('OnEnter', function(self)
+		GameTooltip:SetOwner(self, 'ANCHOR_RIGHT')
+		GameTooltip:AddLine('Refresh /played data')
+		GameTooltip:Show()
+	end)
+	refreshButton:SetScript('OnLeave', function()
+		GameTooltip:Hide()
+	end)
+	window.refreshButton = refreshButton
+
 	-- Group By dropdown (modern style, positioned before settings button)
 	local groupDropdown = LibAT.UI.CreateDropdown(controlFrame, 'Group By', 130, 22)
 	groupDropdown:SetPoint('LEFT', controlFrame, 'LEFT', 10, 2)

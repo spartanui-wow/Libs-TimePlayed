@@ -69,14 +69,15 @@ end
 function LibsTimePlayed:SlashCommand(input)
 	input = input and input:trim():lower() or ''
 
-	if input == '' or input == 'config' or input == 'options' then
-		self:OpenOptions()
-	elseif input == 'played' then
-		RequestTimePlayed()
-	elseif input == 'popup' or input == 'window' or input == 'show' then
+	if input == '' then
 		self:TogglePopup()
+	elseif input == 'options' or input == 'config' then
+		self:OpenOptions()
+	elseif input == 'refresh' or input == 'played' then
+		RequestTimePlayed()
+		self:Print('Refreshing /played data...')
 	else
-		self:Print('Commands: /libstp [config|played|popup]')
+		self:Print('Commands: /libstp [options|refresh]')
 	end
 end
 
