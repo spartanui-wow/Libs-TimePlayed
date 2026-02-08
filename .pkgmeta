@@ -9,3 +9,9 @@ manual-changelog:
   markup-type: markdown
 
 enable-nolib-creation: no
+
+externals:
+  Libs-AddonTools: https://github.com/Wutname1/Libs-AddonTools.git
+
+move-folders:
+  Libs-TimePlayed/Libs-AddonTools: Libs-AddonTools

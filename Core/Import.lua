@@ -438,14 +438,108 @@ end
 ---Check if this is a first-time user (no characters tracked and hasn't been offered import)
 ---@return boolean isFirstTime
 function Import:IsFirstTimeUser()
-	-- Count existing characters
+	-- Count existing characters (excluding current character)
+	local currentCharKey = GetNormalizedRealmName() .. '-' .. UnitName('player')
 	local charCount = 0
-	for _ in pairs(LibsTimePlayed.globaldb.characters) do
-		charCount = charCount + 1
+	for key in pairs(LibsTimePlayed.globaldb.characters) do
+		if key ~= currentCharKey then
+			charCount = charCount + 1
+		end
 	end
 
-	-- First time if: no characters AND hasn't been offered import yet
+	-- First time if: no OTHER characters AND hasn't been offered import yet
+	-- This allows the current character to be added without interfering with import detection
 	return charCount == 0 and not LibsTimePlayed.globaldb.firstTimeImportOffered
+end
+
+---Perform import from a source and report result
+---@param sourceName string Source to import from
+local function DoImport(sourceName)
+	LibsTimePlayed:Log('First-time import accepted, importing from ' .. sourceName, 'info')
+	Import:SetMergeStrategy('newest_wins')
+	local success, imported, skipped = Import:ImportFrom(sourceName)
+	if success then
+		LibsTimePlayed:Print(string.format('Welcome import complete: %d character(s) imported from %s!', imported, sourceName))
+		LibsTimePlayed:UpdateDisplay()
+	else
+		LibsTimePlayed:Print('Import failed. You can try again from /libstp options.')
+	end
+end
+
+---Create the import dialog frame using LibAT.UI
+---@param message string Dialog message text
+---@param buttons table[] Array of {text, onClick} button definitions
+local function ShowImportDialog(message, buttons)
+	-- Destroy previous dialog if it exists
+	if _G['LibsTPImportDialog'] then
+		_G['LibsTPImportDialog']:Hide()
+		_G['LibsTPImportDialog']:SetParent(nil)
+		_G['LibsTPImportDialog'] = nil
+	end
+
+	local dialogWidth = 360
+	local dialogHeight = 180
+
+	-- Create dialog frame
+	local dialog = CreateFrame('Frame', 'LibsTPImportDialog', UIParent, 'BackdropTemplate')
+	dialog:SetSize(dialogWidth, dialogHeight)
+	dialog:SetPoint('CENTER', UIParent, 'CENTER', 0, 100)
+	dialog:SetFrameStrata('DIALOG')
+	dialog:SetBackdrop({
+		bgFile = 'Interface\\Tooltips\\UI-Tooltip-Background',
+		edgeFile = 'Interface\\Tooltips\\UI-Tooltip-Border',
+		tile = true,
+		tileSize = 16,
+		edgeSize = 16,
+		insets = { left = 4, right = 4, top = 4, bottom = 4 },
+	})
+	dialog:SetBackdropColor(0.08, 0.08, 0.08, 0.95)
+	dialog:SetBackdropBorderColor(0.6, 0.6, 0.6, 1)
+	dialog:EnableMouse(true)
+	dialog:SetMovable(true)
+	dialog:RegisterForDrag('LeftButton')
+	dialog:SetScript('OnDragStart', dialog.StartMoving)
+	dialog:SetScript('OnDragStop', dialog.StopMovingOrSizing)
+
+	-- Title bar
+	local title = dialog:CreateFontString(nil, 'OVERLAY', 'GameFontNormal')
+	title:SetPoint('TOP', dialog, 'TOP', 0, -12)
+	title:SetText("|cffffffffLib's|r |cffe21f1fTimePlayed|r")
+
+	-- Message text
+	local text = dialog:CreateFontString(nil, 'OVERLAY', 'GameFontHighlight')
+	text:SetPoint('TOP', title, 'BOTTOM', 0, -10)
+	text:SetPoint('LEFT', dialog, 'LEFT', 20, 0)
+	text:SetPoint('RIGHT', dialog, 'RIGHT', -20, 0)
+	text:SetJustifyH('CENTER')
+	text:SetText(message)
+	text:SetWordWrap(true)
+
+	-- Measure text height and resize dialog if needed
+	local textHeight = text:GetStringHeight()
+	local minContentHeight = 12 + title:GetStringHeight() + 10 + textHeight + 15 + 26 + 14
+	if minContentHeight > dialogHeight then
+		dialog:SetHeight(minContentHeight)
+	end
+
+	-- Create buttons from right to left
+	local buttonWidth = math.min(130, (dialogWidth - 20 - (#buttons - 1) * 6) / #buttons)
+	local totalButtonsWidth = (#buttons * buttonWidth) + ((#buttons - 1) * 6)
+	local startX = -totalButtonsWidth / 2
+
+	for i, btnDef in ipairs(buttons) do
+		local btn = LibAT.UI.CreateButton(dialog, buttonWidth, 26, btnDef.text, true)
+		btn:SetPoint('BOTTOM', dialog, 'BOTTOM', startX + (i - 1) * (buttonWidth + 6) + buttonWidth / 2, 14)
+		btn:SetScript('OnClick', function()
+			dialog:Hide()
+			btnDef.onClick()
+		end)
+	end
+
+	-- Allow Escape to close
+	tinsert(UISpecialFrames, 'LibsTPImportDialog')
+
+	dialog:Show()
 end
 
 ---Offer first-time import to the user
@@ -470,59 +564,82 @@ function Import:OfferFirstTimeImport()
 		return
 	end
 
-	-- Sort by character count descending (offer the one with most data first)
+	-- Sort sources: prefer AltVault (cleaner data format), then by character count
 	table.sort(availableSources, function(a, b)
+		-- If one is AltVault and counts are close (within 10%), prefer AltVault
+		if a.name == 'AltVault' and b.name ~= 'AltVault' then
+			local ratio = a.count / b.count
+			if ratio >= 0.9 then
+				return true
+			end
+		elseif b.name == 'AltVault' and a.name ~= 'AltVault' then
+			local ratio = b.count / a.count
+			if ratio >= 0.9 then
+				return false
+			end
+		end
 		return a.count > b.count
 	end)
 
 	local topSource = availableSources[1]
+	local hasMultipleSources = #availableSources > 1
 
-	-- Build import message
-	local message = string.format(
-		"Welcome to Lib's TimePlayed!\n\nDetected %s with %d character(s).\n\nWould you like to import this data to quickly populate your time-played history?",
-		topSource.name,
-		topSource.count
-	)
+	if hasMultipleSources then
+		-- Build multi-source message
+		local message = 'Detected multiple data sources:\n\n'
+		for i, src in ipairs(availableSources) do
+			local recommended = (i == 1) and ' (Recommended)' or ''
+			message = message .. string.format('  %s: %d character(s)%s\n', src.name, src.count, recommended)
+		end
 
-	-- Show StaticPopup dialog
-	StaticPopupDialogs['LIBSTP_FIRST_TIME_IMPORT'] = {
-		text = message,
-		button1 = 'Import Now',
-		button2 = 'No Thanks',
-		button3 = 'Remind Me Later',
-		OnAccept = function()
-			-- Import from the top source
-			LibsTimePlayed:Log('First-time import accepted, importing from ' .. topSource.name, 'info')
+		-- Show dialog with a button per source + No Thanks
+		ShowImportDialog(message, {
+			{
+				text = topSource.name,
+				onClick = function()
+					DoImport(topSource.name)
+				end,
+			},
+			{
+				text = availableSources[2].name,
+				onClick = function()
+					DoImport(availableSources[2].name)
+				end,
+			},
+			{
+				text = 'No Thanks',
+				onClick = function()
+					LibsTimePlayed:Log('First-time import declined', 'debug')
+					LibsTimePlayed:Print('You can import data anytime from /libstp options.')
+				end,
+			},
+		})
+	else
+		-- Single source
+		local message = string.format('Detected %s with %d character(s).\n\nImport this data to populate your time-played history?', topSource.name, topSource.count)
 
-			-- Use "newest_wins" strategy for first import
-			Import:SetMergeStrategy('newest_wins')
-
-			-- Perform import
-			local success, imported, skipped = Import:ImportFrom(topSource.name)
-
-			if success then
-				LibsTimePlayed:Print(string.format('Welcome import complete: %d character(s) imported!', imported))
-				LibsTimePlayed:UpdateDisplay()
-			else
-				LibsTimePlayed:Print('Import failed. You can try again from /libstp options.')
-			end
-		end,
-		OnCancel = function()
-			-- User declined import
-			LibsTimePlayed:Log('First-time import declined', 'debug')
-			LibsTimePlayed:Print('You can import data anytime from /libstp options.')
-		end,
-		OnAlt = function()
-			-- User wants to be reminded later - reset the flag
-			LibsTimePlayed.globaldb.firstTimeImportOffered = false
-			LibsTimePlayed:Log('First-time import deferred', 'debug')
-			LibsTimePlayed:Print('You can import data anytime from /libstp options.')
-		end,
-		timeout = 0,
-		whileDead = true,
-		hideOnEscape = true,
-		preferredIndex = 3, -- High priority popup
-	}
-
-	StaticPopup_Show('LIBSTP_FIRST_TIME_IMPORT')
+		ShowImportDialog(message, {
+			{
+				text = 'Import Now',
+				onClick = function()
+					DoImport(topSource.name)
+				end,
+			},
+			{
+				text = 'Remind Later',
+				onClick = function()
+					LibsTimePlayed.globaldb.firstTimeImportOffered = false
+					LibsTimePlayed:Log('First-time import deferred', 'debug')
+					LibsTimePlayed:Print('You can import data anytime from /libstp options.')
+				end,
+			},
+			{
+				text = 'No Thanks',
+				onClick = function()
+					LibsTimePlayed:Log('First-time import declined', 'debug')
+					LibsTimePlayed:Print('You can import data anytime from /libstp options.')
+				end,
+			},
+		})
+	end
 end

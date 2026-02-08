@@ -67,6 +67,22 @@ function LibsTimePlayed:InitializeOptions()
 							LibsTimePlayed:UpdateDisplay()
 						end,
 					},
+					fontSize = {
+						name = 'Popup Font Size',
+						desc = 'Font size for the popup window',
+						type = 'range',
+						order = 4,
+						min = 8,
+						max = 16,
+						step = 1,
+						get = function()
+							return LibsTimePlayed.db.display.fontSize
+						end,
+						set = function(_, val)
+							LibsTimePlayed.db.display.fontSize = val
+							LibsTimePlayed:ApplyFontSize()
+						end,
+					},
 					showMilestones = {
 						name = 'Show Milestones',
 						desc = 'Display milestone achievements in tooltip and popup window',
@@ -105,26 +121,6 @@ function LibsTimePlayed:InitializeOptions()
 						name = 'Import time-played data from AltVault or Altoholic to quickly populate your database without logging into each character.',
 						type = 'description',
 						order = 0,
-					},
-					detectButton = {
-						name = 'Detect Sources',
-						desc = 'Scan for available import sources',
-						type = 'execute',
-						order = 1,
-						func = function()
-							local sources = LibsTimePlayed.Import:GetAvailableSources()
-							local found = {}
-							for name, info in pairs(sources) do
-								if info.available then
-									table.insert(found, name .. ' (' .. info.characterCount .. ' characters)')
-								end
-							end
-							if #found > 0 then
-								LibsTimePlayed:Print('Found: ' .. table.concat(found, ', '))
-							else
-								LibsTimePlayed:Print('No import sources detected. Install AltVault or Altoholic to import data.')
-							end
-						end,
 					},
 					sourceSelect = {
 						name = 'Import Source',

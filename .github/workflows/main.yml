@@ -1,0 +1,36 @@
+name: Package and release
+
+on:
+  push:
+    tags: ["**"]
+    branches: ["master"]
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    env:
+      CF_API_KEY: ${{ secrets.CF_API_KEY }}
+      GITHUB_OAUTH: ${{ secrets.GITHUB_TOKEN }} # "GITHUB_TOKEN" is a secret always provided to the workflow
+
+    steps:
+      - name: Clone project
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # Fetch full git history for changelog generation
+
+      - name: Generate Smart Changelog with AI Summaries
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          AI_PROVIDER: gemini
+          GITHUB_REF: ${{ github.ref }}
+        run: |
+          chmod +x .github/scripts/generate-changelog.sh
+          .github/scripts/generate-changelog.sh CHANGELOG.md
+
+      - name: Add Changelog to Run Summary
+        run: |
+          cat CHANGELOG.md >> $GITHUB_STEP_SUMMARY
+
+      # Run the GitHub Action for the packager project
+      - name: Package and release
+        uses: BigWigsMods/packager@master

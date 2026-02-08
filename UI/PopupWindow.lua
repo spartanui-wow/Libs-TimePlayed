@@ -1,9 +1,19 @@
 ---@class LibsTimePlayed
 local LibsTimePlayed = LibStub('AceAddon-3.0'):GetAddon('Libs-TimePlayed')
 
-local ROW_HEIGHT = 22
-local CHAR_ROW_HEIGHT = 18
+local DEFAULT_FONT_SIZE = 10
 local MAX_ROWS = 120
+
+-- Dynamically computed row heights based on font size
+local function GetRowHeight()
+	local fontSize = LibsTimePlayed.db and LibsTimePlayed.db.display.fontSize or DEFAULT_FONT_SIZE
+	return fontSize + 12
+end
+
+local function GetCharRowHeight()
+	local fontSize = LibsTimePlayed.db and LibsTimePlayed.db.display.fontSize or DEFAULT_FONT_SIZE
+	return fontSize + 8
+end
 
 local GROUPBY_ITEMS = {
 	{ key = 'class', label = 'Class' },
@@ -30,20 +40,44 @@ local rows = {}
 local popupFrame
 local expandedGroups = {} -- tracks which groups are expanded by key
 
+---Apply the configured font size to a FontString
+---@param fontString FontString
+local function ApplyFont(fontString)
+	local fontSize = LibsTimePlayed.db and LibsTimePlayed.db.display.fontSize or DEFAULT_FONT_SIZE
+	local fontFile = GameFontNormalSmall:GetFont()
+	fontString:SetFont(fontFile, fontSize, '')
+end
+
+-- WoW max character name = 12 chars. Longest display: "    Characternam (80)" = ~21 chars + 4 buffer
+-- We measure the max label width using the current font, then cap at that
+local MAX_LABEL_CHARS = 25 -- "    " indent (4) + 12 char name + " (80)" (5) + 4 buffer
+
+---Compute label width: scales with row width but caps at the max name length
+---@param rowWidth number Total row width
+---@return number labelWidth
+local function GetLabelWidth(rowWidth)
+	local fontSize = LibsTimePlayed.db and LibsTimePlayed.db.display.fontSize or DEFAULT_FONT_SIZE
+	-- Approximate max label width from font size and max chars
+	local maxLabelWidth = MAX_LABEL_CHARS * fontSize * 0.6
+	-- Give label ~30% of row width, but never more than the max
+	local dynamicWidth = rowWidth * 0.30
+	return math.min(math.max(dynamicWidth, 90), maxLabelWidth)
+end
+
 ---Create a single data row with label, bar, percent, and value
 ---@param parent Frame
 ---@param width number
 ---@return Frame
 local function CreateRow(parent, width)
 	local row = CreateFrame('Frame', nil, parent)
-	row:SetHeight(ROW_HEIGHT)
+	row:SetHeight(GetRowHeight())
 	row:SetWidth(width)
 
 	-- Expand indicator
-	local expandIcon = row:CreateFontString(nil, 'OVERLAY', 'GameFontNormalSmall')
+	local expandIcon = row:CreateTexture(nil, 'OVERLAY')
 	expandIcon:SetPoint('LEFT', row, 'LEFT', 4, 0)
-	expandIcon:SetWidth(12)
-	expandIcon:SetJustifyH('LEFT')
+	expandIcon:SetSize(12, 12)
+	expandIcon:SetAtlas('common-dropdown-icon-next')
 	row.expandIcon = expandIcon
 
 	-- Faction icon (atlas texture)
@@ -55,8 +89,9 @@ local function CreateRow(parent, width)
 	-- Group/class label
 	local label = row:CreateFontString(nil, 'OVERLAY', 'GameFontNormalSmall')
 	label:SetPoint('LEFT', factionIcon, 'RIGHT', 2, 0)
-	label:SetWidth(90)
+	label:SetWidth(GetLabelWidth(width))
 	label:SetJustifyH('LEFT')
+	ApplyFont(label)
 	row.label = label
 
 	-- Value text (right side)
@@ -64,6 +99,7 @@ local function CreateRow(parent, width)
 	valueText:SetPoint('RIGHT', row, 'RIGHT', -4, 0)
 	valueText:SetWidth(80)
 	valueText:SetJustifyH('RIGHT')
+	ApplyFont(valueText)
 	row.valueText = valueText
 
 	-- Percent text
@@ -71,6 +107,7 @@ local function CreateRow(parent, width)
 	percentText:SetPoint('RIGHT', valueText, 'LEFT', -4, 0)
 	percentText:SetWidth(45)
 	percentText:SetJustifyH('RIGHT')
+	ApplyFont(percentText)
 	row.percentText = percentText
 
 	-- StatusBar between label and percent
@@ -153,14 +190,20 @@ end
 ---@param isExpanded boolean
 ---@param hasChars boolean
 local function SetupGroupRow(row, group, barPercent, percent, isExpanded, hasChars)
-	row:SetHeight(ROW_HEIGHT)
+	row:SetHeight(GetRowHeight())
 
-	-- Expand/collapse indicator
+	-- Expand/collapse indicator (common-dropdown-icon-next: default points right)
 	if hasChars then
-		row.expandIcon:SetText(isExpanded and '▼' or '▶')
-		row.expandIcon:SetTextColor(0.8, 0.8, 0.8)
+		row.expandIcon:Show()
+		if isExpanded then
+			-- Point down: rotate 90 degrees clockwise
+			row.expandIcon:SetRotation(math.rad(-90))
+		else
+			-- Point right: no rotation needed
+			row.expandIcon:SetRotation(0)
+		end
 	else
-		row.expandIcon:SetText('')
+		row.expandIcon:Hide()
 	end
 
 	-- Faction icon (only show if player plays both factions and this is faction grouping)
@@ -217,10 +260,10 @@ end
 ---@param groupTotal number
 ---@param groupColor table
 local function SetupCharRow(row, char, groupBy, groupTotal, groupColor)
-	row:SetHeight(CHAR_ROW_HEIGHT)
+	row:SetHeight(GetCharRowHeight())
 
 	-- No expand indicator for char rows
-	row.expandIcon:SetText('')
+	row.expandIcon:Hide()
 
 	-- Faction icon for character rows (if player plays both factions)
 	if PlaysBothFactions() and char.faction and FACTION_ATLAS[char.faction] then
@@ -243,7 +286,7 @@ local function SetupCharRow(row, char, groupBy, groupTotal, groupColor)
 
 	row.label:SetText('    ' .. char.name .. ' (' .. char.level .. ')')
 	row.label:SetTextColor(cr, cg, cb)
-	row.label:SetWidth(90)
+	row.label:SetWidth(GetLabelWidth(row:GetWidth()))
 
 	-- Bar showing character's proportion of the group total
 	local charPercent = groupTotal > 0 and (char.totalPlayed / groupTotal) or 0
@@ -287,34 +330,43 @@ function LibsTimePlayed:CreatePopup()
 		width = self.db.popup.width or 520,
 		height = self.db.popup.height or 300,
 		hidePortrait = true,
+		resizable = true,
+		minWidth = 400,
+		minHeight = 200,
 	})
 
 	-- Create control frame for dropdown
 	local controlFrame = LibAT.UI.CreateControlFrame(window)
 
-	-- Group By dropdown
-	local groupDropdown = CreateFrame('Frame', 'LibsTimePlayedGroupDropdown', controlFrame, 'UIDropDownMenuTemplate')
-	groupDropdown:SetPoint('LEFT', controlFrame, 'LEFT', -10, 0)
-	UIDropDownMenu_SetWidth(groupDropdown, 130)
+	-- Settings button (gear icon, positioned at right)
+	local settingsButton = LibAT.UI.CreateIconButton(controlFrame, 'Warfronts-BaseMapIcons-Empty-Workshop', 'Warfronts-BaseMapIcons-Alliance-Workshop', 'Warfronts-BaseMapIcons-Horde-Workshop')
+	settingsButton:SetPoint('RIGHT', controlFrame, 'RIGHT', -5, 5)
+	settingsButton:SetScript('OnClick', function()
+		LibsTimePlayed:OpenOptions()
+	end)
+	window.settingsButton = settingsButton
 
-	UIDropDownMenu_Initialize(groupDropdown, function(self, level)
-		local info = UIDropDownMenu_CreateInfo()
+	-- Group By dropdown (modern style, positioned before settings button)
+	local groupDropdown = LibAT.UI.CreateDropdown(controlFrame, 'Group By', 130, 22)
+	groupDropdown:SetPoint('LEFT', controlFrame, 'LEFT', 10, 2)
+
+	-- Setup dropdown generator function
+	groupDropdown:SetupMenu(function(dropdown, rootDescription)
+		rootDescription:SetTag('MENU_TIME_PLAYED_GROUP_BY')
+
 		for _, item in ipairs(GROUPBY_ITEMS) do
-			info.text = item.label
-			info.value = item.key
-			info.func = function()
+			local button = rootDescription:CreateRadio(item.label, function()
+				return LibsTimePlayed.db.display.groupBy == item.key
+			end, function()
 				LibsTimePlayed.db.display.groupBy = item.key
-				UIDropDownMenu_SetSelectedValue(groupDropdown, item.key)
 				LibsTimePlayed:UpdatePopup()
-			end
-			info.checked = (LibsTimePlayed.db.display.groupBy == item.key)
-			UIDropDownMenu_AddButton(info, level)
+			end)
 		end
 	end)
 
+	-- Set initial dropdown text based on current groupBy
 	local currentGroupBy = self.db.display.groupBy or 'class'
-	UIDropDownMenu_SetSelectedValue(groupDropdown, currentGroupBy)
-	UIDropDownMenu_SetText(groupDropdown, 'Group: ' .. GROUPBY_LABELS[currentGroupBy])
+	groupDropdown:SetText('Group: ' .. GROUPBY_LABELS[currentGroupBy])
 
 	window.groupDropdown = groupDropdown
 
@@ -344,13 +396,13 @@ function LibsTimePlayed:CreatePopup()
 
 	-- Total text (bottom)
 	local totalText = window:CreateFontString(nil, 'OVERLAY', 'GameFontHighlight')
-	totalText:SetPoint('BOTTOMLEFT', window, 'BOTTOMLEFT', 20, 16)
+	totalText:SetPoint('BOTTOMLEFT', window, 'BOTTOMLEFT', 15, 7)
 	totalText:SetJustifyH('LEFT')
 	window.totalText = totalText
 
 	-- Milestone text (bottom right)
 	local milestoneText = window:CreateFontString(nil, 'OVERLAY', 'GameFontNormalSmall')
-	milestoneText:SetPoint('BOTTOMRIGHT', window, 'BOTTOMRIGHT', -20, 16)
+	milestoneText:SetPoint('BOTTOMRIGHT', window, 'BOTTOMRIGHT', -20, 7)
 	milestoneText:SetPoint('LEFT', totalText, 'RIGHT', 10, 0)
 	milestoneText:SetJustifyH('RIGHT')
 	milestoneText:SetTextColor(0.7, 0.7, 0.7)
@@ -367,6 +419,25 @@ function LibsTimePlayed:CreatePopup()
 		self.db.popup.height = window:GetHeight()
 	end)
 
+	-- Recalculate row widths and label widths on resize
+	window:HookScript('OnSizeChanged', function()
+		if not window:IsShown() then
+			return
+		end
+
+		local rowWidth = scrollFrame:GetWidth() - 20
+		for i = 1, MAX_ROWS do
+			local row = rows[i]
+			if row then
+				row:SetWidth(rowWidth)
+				row.label:SetWidth(GetLabelWidth(rowWidth))
+			end
+		end
+
+		-- Re-layout the content
+		self:UpdatePopup()
+	end)
+
 	popupFrame = window
 	return window
 end
@@ -381,7 +452,7 @@ function LibsTimePlayed:UpdatePopup()
 
 	-- Update dropdown text
 	if popupFrame.groupDropdown then
-		UIDropDownMenu_SetText(popupFrame.groupDropdown, 'Group: ' .. GROUPBY_LABELS[groupBy])
+		popupFrame.groupDropdown:SetText('Group: ' .. GROUPBY_LABELS[groupBy])
 	end
 
 	-- Get data
@@ -473,7 +544,7 @@ function LibsTimePlayed:UpdatePopup()
 			GameTooltip:Hide()
 		end)
 
-		yOffset = yOffset + ROW_HEIGHT
+		yOffset = yOffset + GetRowHeight()
 
 		-- Show character detail rows if expanded
 		if isExpanded and hasChars then
@@ -493,7 +564,7 @@ function LibsTimePlayed:UpdatePopup()
 				charRow:SetScript('OnEnter', nil)
 				charRow:SetScript('OnLeave', nil)
 
-				yOffset = yOffset + CHAR_ROW_HEIGHT
+				yOffset = yOffset + GetCharRowHeight()
 			end
 		end
 	end
@@ -517,6 +588,27 @@ function LibsTimePlayed:UpdatePopup()
 	else
 		popupFrame.milestoneText:Hide()
 	end
+end
+
+---Apply font size to all existing popup rows and refresh
+function LibsTimePlayed:ApplyFontSize()
+	if not popupFrame then
+		return
+	end
+
+	local rowWidth = popupFrame.scrollFrame:GetWidth() - 20
+	for i = 1, MAX_ROWS do
+		local row = rows[i]
+		if row then
+			ApplyFont(row.label)
+			ApplyFont(row.valueText)
+			ApplyFont(row.percentText)
+			row.label:SetWidth(GetLabelWidth(rowWidth))
+		end
+	end
+
+	-- Refresh layout with new row heights
+	self:UpdatePopup()
 end
 
 ---Toggle popup visibility

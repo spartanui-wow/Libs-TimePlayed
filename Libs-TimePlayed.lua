@@ -54,8 +54,9 @@ function LibsTimePlayed:OnEnable()
 		})
 	end
 
-	-- Check for first-time import after a short delay (let other addons load)
-	self:ScheduleTimer('CheckFirstTimeImport', 3)
+	-- Check for first-time import BEFORE requesting played time
+	-- This prevents the current character from being added to DB before import check
+	self:ScheduleTimer('CheckFirstTimeImport', 1)
 
 	self:Log("Lib's TimePlayed loaded", 'info')
 end
@@ -90,12 +91,15 @@ end
 -- Check for first-time import opportunity
 function LibsTimePlayed:CheckFirstTimeImport()
 	if not self.Import then
+		self:Log('Import module not available', 'warning')
 		return
 	end
 
 	-- Check if this is a first-time user
 	if self.Import:IsFirstTimeUser() then
-		self:Log('First-time user detected, checking for import sources...', 'debug')
+		self:Log('First-time user detected, checking for import sources...', 'info')
 		self.Import:OfferFirstTimeImport()
+	else
+		self:Log('Not a first-time user - skipping import check', 'debug')
 	end
 end

@@ -24,6 +24,7 @@ local defaults = {
 			format = 'total', -- 'total', 'session', 'level'
 			timeFormat = 'smart', -- 'smart', 'full', 'hours'
 			groupBy = 'class', -- 'class', 'realm', 'faction', 'none'
+			fontSize = 10, -- popup window font size (8-16)
 			showMilestones = true,
 			showStreaks = true,
 		},

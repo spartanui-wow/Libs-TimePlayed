@@ -24,7 +24,6 @@ function LibsTimePlayed:BuildTooltip(anchorFrame)
 		row:GetCell(1):SetText('Waiting for /played data...'):SetColSpan(3):SetJustifyH('CENTER'):SetTextColor(0.7, 0.7, 0.7)
 		tooltip:SmartAnchorTo(anchorFrame)
 		tooltip:SetAutoHideDelay(0.1, anchorFrame)
-		tooltip:UpdateLayout()
 		tooltip:Show()
 		return tooltip
 	end
@@ -161,7 +160,6 @@ function LibsTimePlayed:BuildTooltip(anchorFrame)
 
 	tooltip:SmartAnchorTo(anchorFrame)
 	tooltip:SetAutoHideDelay(0.1, anchorFrame)
-	tooltip:UpdateLayout()
 	tooltip:Show()
 
 	return tooltip
