@@ -28,6 +28,9 @@ function LibsTimePlayed:OnEnable()
 	self:InitializeMinimapButton()
 	self:InitializeOptions()
 
+	-- Check for first-time import after a short delay (let other addons load)
+	self:ScheduleTimer('CheckFirstTimeImport', 3)
+
 	self:Log("Lib's TimePlayed loaded", 'info')
 end
 
@@ -55,5 +58,18 @@ function LibsTimePlayed:Log(message, level)
 	level = level or 'info'
 	if self.logger and self.logger[level] then
 		self.logger[level](message)
+	end
+end
+
+-- Check for first-time import opportunity
+function LibsTimePlayed:CheckFirstTimeImport()
+	if not self.Import then
+		return
+	end
+
+	-- Check if this is a first-time user
+	if self.Import:IsFirstTimeUser() then
+		self:Log('First-time user detected, checking for import sources...', 'debug')
+		self.Import:OfferFirstTimeImport()
 	end
 end

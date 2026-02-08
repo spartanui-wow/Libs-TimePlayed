@@ -57,6 +57,7 @@ function LibsTimePlayed:InitializeOptions()
 							class = 'Class',
 							realm = 'Realm',
 							faction = 'Faction',
+							none = 'All Characters',
 						},
 						get = function()
 							return LibsTimePlayed.db.display.groupBy
@@ -78,6 +79,134 @@ function LibsTimePlayed:InitializeOptions()
 						set = function(_, val)
 							LibsTimePlayed.db.display.showMilestones = val
 						end,
+					},
+				},
+			},
+			import = {
+				name = 'Import Data',
+				type = 'group',
+				order = 1.5,
+				inline = true,
+				args = {
+					desc = {
+						name = 'Import time-played data from AltVault or Altoholic to quickly populate your database without logging into each character.',
+						type = 'description',
+						order = 0,
+					},
+					detectButton = {
+						name = 'Detect Sources',
+						desc = 'Scan for available import sources',
+						type = 'execute',
+						order = 1,
+						func = function()
+							local sources = LibsTimePlayed.Import:GetAvailableSources()
+							local found = {}
+							for name, info in pairs(sources) do
+								if info.available then
+									table.insert(found, name .. ' (' .. info.characterCount .. ' characters)')
+								end
+							end
+							if #found > 0 then
+								LibsTimePlayed:Print('Found: ' .. table.concat(found, ', '))
+							else
+								LibsTimePlayed:Print('No import sources detected. Install AltVault or Altoholic to import data.')
+							end
+						end,
+					},
+					sourceSelect = {
+						name = 'Import Source',
+						desc = 'Select which addon to import from',
+						type = 'select',
+						order = 2,
+						values = function()
+							local sources = LibsTimePlayed.Import:GetAvailableSources()
+							local values = {}
+							for name, info in pairs(sources) do
+								if info.available then
+									values[name] = name .. ' (' .. info.characterCount .. ' characters)'
+								end
+							end
+							return values
+						end,
+						get = function()
+							return LibsTimePlayed.selectedImportSource
+						end,
+						set = function(_, val)
+							LibsTimePlayed.selectedImportSource = val
+						end,
+					},
+					mergeStrategy = {
+						name = 'Merge Strategy',
+						desc = 'How to handle conflicts when importing characters that already exist',
+						type = 'select',
+						order = 3,
+						values = {
+							newest_wins = 'Newest Wins (use most recent data)',
+							prefer_imported = 'Prefer Imported (always use import data)',
+							prefer_existing = 'Prefer Existing (keep current data)',
+							max_values = 'Max Values (use highest time values)',
+						},
+						get = function()
+							return LibsTimePlayed.Import:GetMergeStrategy()
+						end,
+						set = function(_, val)
+							LibsTimePlayed.Import:SetMergeStrategy(val)
+						end,
+					},
+					importButton = {
+						name = 'Import',
+						desc = 'Import character data from the selected source',
+						type = 'execute',
+						order = 4,
+						confirm = function()
+							if not LibsTimePlayed.selectedImportSource then
+								return false
+							end
+							local sources = LibsTimePlayed.Import:GetAvailableSources()
+							local source = sources[LibsTimePlayed.selectedImportSource]
+							if not source or not source.available then
+								return false
+							end
+							return 'Import ' .. source.characterCount .. ' character(s) from ' .. LibsTimePlayed.selectedImportSource .. '?'
+						end,
+						func = function()
+							if not LibsTimePlayed.selectedImportSource then
+								LibsTimePlayed:Print('Please select an import source first.')
+								return
+							end
+
+							local success, imported, skipped = LibsTimePlayed.Import:ImportFrom(LibsTimePlayed.selectedImportSource)
+							if success then
+								LibsTimePlayed:Print('Import complete: ' .. imported .. ' imported, ' .. skipped .. ' skipped')
+								LibsTimePlayed:UpdateDisplay()
+							else
+								LibsTimePlayed:Print('Import failed. Check /logs for details.')
+							end
+						end,
+					},
+					spacer = {
+						name = '',
+						type = 'description',
+						order = 5,
+					},
+					historyDesc = {
+						name = function()
+							local history = LibsTimePlayed.Import:GetImportHistory()
+							if #history == 0 then
+								return 'No import history yet.'
+							end
+
+							local lines = { 'Import History:' }
+							for i = #history, math.max(1, #history - 2), -1 do
+								local record = history[i]
+								local timestamp = date('%Y-%m-%d %H:%M', record.timestamp)
+								table.insert(lines, string.format('  %s: %s (%d imported, %d skipped)', timestamp, record.source, record.charactersImported, record.charactersSkipped))
+							end
+							return table.concat(lines, '\n')
+						end,
+						type = 'description',
+						order = 6,
+						fontSize = 'small',
 					},
 				},
 			},

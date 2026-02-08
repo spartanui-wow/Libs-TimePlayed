@@ -2,5 +2,10 @@ package-as: Libs-TimePlayed
 
 ignore:
   - "*.md"
+  - "*.Definition.lua"
+
+manual-changelog:
+  filename: CHANGELOG.md
+  markup-type: markdown
 
 enable-nolib-creation: no

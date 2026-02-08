@@ -70,6 +70,13 @@ function LibsTimePlayed:BuildTooltip(anchorFrame)
 		row = tooltip:AddRow()
 		row:GetCell(1):SetText('Grouped by: ' .. GROUPBY_LABELS[groupBy]):SetTextColor(0.5, 0.5, 0.5):SetColSpan(3)
 
+		-- Count total characters to determine if we should hide individual character details
+		local totalCharCount = 0
+		for _, group in ipairs(sortedGroups) do
+			totalCharCount = totalCharCount + #group.chars
+		end
+		local hideCharacters = totalCharCount >= 10
+
 		for _, group in ipairs(sortedGroups) do
 			local clr = group.color
 			local r, g, b = clr.r, clr.g, clr.b
@@ -82,18 +89,22 @@ function LibsTimePlayed:BuildTooltip(anchorFrame)
 			row:GetCell(3):SetText(self.FormatTime(group.total, 'smart')):SetTextColor(0.8, 0.8, 0.8)
 
 			-- Individual characters under each group
-			for _, char in ipairs(group.chars) do
-				local cr, cg, cb = 0.6, 0.6, 0.6
-				if groupBy ~= 'class' then
-					local charColor = RAID_CLASS_COLORS[char.classFile]
-					if charColor then
-						cr, cg, cb = charColor.r, charColor.g, charColor.b
+			-- Hide if: 10+ total characters OR only 1 character in this group
+			local showCharacters = not hideCharacters and #group.chars > 1
+			if showCharacters then
+				for _, char in ipairs(group.chars) do
+					local cr, cg, cb = 0.6, 0.6, 0.6
+					if groupBy ~= 'class' then
+						local charColor = RAID_CLASS_COLORS[char.classFile]
+						if charColor then
+							cr, cg, cb = charColor.r, charColor.g, charColor.b
+						end
 					end
-				end
 
-				row = tooltip:AddRow()
-				row:GetCell(1):SetText('  ' .. char.name .. ' (' .. char.level .. ')'):SetTextColor(cr, cg, cb):SetColSpan(2)
-				row:GetCell(3):SetText(self.FormatTime(char.totalPlayed, 'smart')):SetTextColor(0.6, 0.6, 0.6)
+					row = tooltip:AddRow()
+					row:GetCell(1):SetText('  ' .. char.name .. ' (' .. char.level .. ')'):SetTextColor(cr, cg, cb):SetColSpan(2)
+					row:GetCell(3):SetText(self.FormatTime(char.totalPlayed, 'smart')):SetTextColor(0.6, 0.6, 0.6)
+				end
 			end
 		end
 

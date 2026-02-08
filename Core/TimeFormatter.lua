@@ -21,7 +21,11 @@ function LibsTimePlayed.FormatTime(seconds, format)
 		local totalHours = seconds / 3600
 		return string.format('%.1fh', totalHours)
 	elseif format == 'full' then
-		if days > 0 then
+		if days >= 365 then
+			local years = math.floor(days / 365)
+			local remDays = days % 365
+			return string.format('%dy %dd %dh %dm', years, remDays, hours, minutes)
+		elseif days > 0 then
 			return string.format('%dd %dh %dm', days, hours, minutes)
 		elseif hours > 0 then
 			return string.format('%dh %dm', hours, minutes)
@@ -32,7 +36,7 @@ function LibsTimePlayed.FormatTime(seconds, format)
 		if days >= 365 then
 			local years = math.floor(days / 365)
 			local remDays = days % 365
-			return string.format('%dy %dd', years, remDays)
+			return string.format('%dy %dd %dh', years, remDays, hours)
 		elseif days > 0 then
 			return string.format('%dd %dh', days, hours)
 		elseif hours > 0 then

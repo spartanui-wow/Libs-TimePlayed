@@ -1,9 +1,10 @@
-## Interface: 120000
+## Interface: 120001, 120000, 50503, 38000, 11508, 20505
 ## Title: Lib's TimePlayed
 ## Notes: Track /played time across all characters with class-grouped display
 ## IconTexture: Interface/Icons/INV_Misc_PocketWatch_01
 ## Version: @project-version@
-## Author: Lib
+## Author: Wutname1
+## X-Curse-Project-ID: 1457099
 ## SavedVariables: LibsTimePlayedDB
 ## OptionalDeps: Libs-DataBar, Libs-AddonTools
 ## Category: Data Broker
@@ -30,6 +31,7 @@ Core\Database.lua
 Core\PlayedTracker.lua
 Core\TimeFormatter.lua
 Core\Milestones.lua
+Core\Import.lua
 
 # UI
 UI\DataBroker.lua

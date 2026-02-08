@@ -6,12 +6,16 @@ local defaults = {
 		characters = {
 			-- ["RealmName-CharName"] = { name, realm, class, classFile, level, totalPlayed, levelPlayed, lastUpdated }
 		},
+		importHistory = {
+			-- { source, timestamp, charactersImported, charactersSkipped, strategy }
+		},
+		firstTimeImportOffered = false, -- Track if we've offered first-time import
 	},
 	profile = {
 		display = {
 			format = 'total', -- 'total', 'session', 'level'
 			timeFormat = 'smart', -- 'smart', 'full', 'hours'
-			groupBy = 'class', -- 'class', 'realm', 'faction'
+			groupBy = 'class', -- 'class', 'realm', 'faction', 'none'
 			showMilestones = true,
 		},
 		popup = {

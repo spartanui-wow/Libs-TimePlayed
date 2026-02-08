@@ -3,16 +3,26 @@ local LibsTimePlayed = LibStub('AceAddon-3.0'):GetAddon('Libs-TimePlayed')
 
 local ROW_HEIGHT = 22
 local CHAR_ROW_HEIGHT = 18
-local MAX_ROWS = 120 -- group rows + character rows combined
+local MAX_ROWS = 120
+
 local GROUPBY_ITEMS = {
 	{ key = 'class', label = 'Class' },
 	{ key = 'realm', label = 'Realm' },
 	{ key = 'faction', label = 'Faction' },
+	{ key = 'none', label = 'All Characters' },
 }
+
 local GROUPBY_LABELS = {
 	class = 'Class',
 	realm = 'Realm',
 	faction = 'Faction',
+	none = 'All Characters',
+}
+
+-- Faction atlas mappings
+local FACTION_ATLAS = {
+	Alliance = 'questlog-questtypeicon-alliance',
+	Horde = 'questlog-questtypeicon-horde',
 }
 
 -- Row pool
@@ -36,9 +46,15 @@ local function CreateRow(parent, width)
 	expandIcon:SetJustifyH('LEFT')
 	row.expandIcon = expandIcon
 
+	-- Faction icon (atlas texture)
+	local factionIcon = row:CreateTexture(nil, 'OVERLAY')
+	factionIcon:SetPoint('LEFT', expandIcon, 'RIGHT', 2, 0)
+	factionIcon:SetSize(14, 14)
+	row.factionIcon = factionIcon
+
 	-- Group/class label
 	local label = row:CreateFontString(nil, 'OVERLAY', 'GameFontNormalSmall')
-	label:SetPoint('LEFT', expandIcon, 'RIGHT', 2, 0)
+	label:SetPoint('LEFT', factionIcon, 'RIGHT', 2, 0)
 	label:SetWidth(90)
 	label:SetJustifyH('LEFT')
 	row.label = label
@@ -83,19 +99,6 @@ local function CreateRow(parent, width)
 	return row
 end
 
----Update scrollbar visibility based on content height
----@param frame Frame The scroll frame
-local function UpdateScrollBarVisibility(frame)
-	if not frame.scrollBar then
-		return
-	end
-	if frame:GetVerticalScrollRange() > 0 then
-		frame.scrollBar:Show()
-	else
-		frame.scrollBar:Hide()
-	end
-end
-
 ---Show GameTooltip with character breakdown for a group
 ---@param row Frame
 ---@param group table
@@ -122,249 +125,84 @@ local function ShowGroupTooltip(row, group)
 	GameTooltip:Show()
 end
 
----Create the popup window frame
----@return Frame
-function LibsTimePlayed:CreatePopup()
-	if popupFrame then
-		return popupFrame
-	end
+---Check if user plays both factions
+---@return boolean playsBothFactions
+local function PlaysBothFactions()
+	local hasAlliance = false
+	local hasHorde = false
 
-	local db = self.db.popup
-
-	-- Main frame
-	local frame = CreateFrame('Frame', 'LibsTimePlayedPopup', UIParent, 'BackdropTemplate')
-	frame:SetFrameStrata('DIALOG')
-	frame:SetSize(db.width, db.height)
-	frame:SetPoint(db.point, UIParent, db.point, db.x, db.y)
-	frame:SetClampedToScreen(true)
-	frame:SetMovable(true)
-	frame:SetResizable(true)
-	frame:SetResizeBounds(420, 200, 800, 600)
-	frame:EnableMouse(true)
-	frame:SetBackdrop({
-		bgFile = 'Interface\\ChatFrame\\ChatFrameBackground',
-		edgeFile = 'Interface\\DialogFrame\\UI-DialogBox-Border',
-		tile = true,
-		tileSize = 16,
-		edgeSize = 16,
-		insets = { left = 4, right = 4, top = 4, bottom = 4 },
-	})
-	frame:SetBackdropColor(0, 0, 0, 0.85)
-	frame:SetBackdropBorderColor(0.6, 0.6, 0.6, 1)
-
-	-- Dragging
-	frame:RegisterForDrag('LeftButton')
-	frame:SetScript('OnDragStart', frame.StartMoving)
-	frame:SetScript('OnDragStop', function(f)
-		f:StopMovingOrSizing()
-		local point, _, _, x, y = f:GetPoint()
-		self.db.popup.point = point
-		self.db.popup.x = x
-		self.db.popup.y = y
-	end)
-
-	-- Resize grip
-	local resizer = CreateFrame('Button', nil, frame)
-	resizer:SetSize(16, 16)
-	resizer:SetPoint('BOTTOMRIGHT', frame, 'BOTTOMRIGHT', -4, 4)
-	resizer:SetNormalTexture('Interface\\ChatFrame\\UI-ChatIM-SizeGrabber-Up')
-	resizer:SetHighlightTexture('Interface\\ChatFrame\\UI-ChatIM-SizeGrabber-Highlight')
-	resizer:SetPushedTexture('Interface\\ChatFrame\\UI-ChatIM-SizeGrabber-Down')
-	resizer:SetScript('OnMouseDown', function()
-		frame:StartSizing('BOTTOMRIGHT')
-	end)
-	resizer:SetScript('OnMouseUp', function()
-		frame:StopMovingOrSizing()
-		self.db.popup.width = frame:GetWidth()
-		self.db.popup.height = frame:GetHeight()
-		self:UpdatePopupLayout()
-	end)
-
-	-- Title
-	local title = frame:CreateFontString(nil, 'OVERLAY', 'GameFontHighlightLarge')
-	title:SetPoint('TOP', frame, 'TOP', 0, -12)
-	frame.title = title
-
-	-- Close button
-	local closeBtn = CreateFrame('Button', nil, frame, 'UIPanelCloseButton')
-	closeBtn:SetPoint('TOPRIGHT', frame, 'TOPRIGHT', -2, -2)
-
-	-- Settings button (gear icon, same atlas as LibAT logger)
-	local settingsBtn = CreateFrame('Button', nil, frame)
-	settingsBtn:SetSize(24, 24)
-	settingsBtn:SetPoint('RIGHT', closeBtn, 'LEFT', -2, 0)
-
-	local settingsIcon = settingsBtn:CreateTexture(nil, 'ARTWORK')
-	settingsIcon:SetAtlas('Warfronts-BaseMapIcons-Empty-Workshop')
-	settingsIcon:SetAllPoints()
-
-	local settingsHighlight = settingsBtn:CreateTexture(nil, 'HIGHLIGHT')
-	settingsHighlight:SetAtlas('Warfronts-BaseMapIcons-Alliance-Workshop')
-	settingsHighlight:SetAllPoints()
-
-	settingsBtn:SetScript('OnClick', function()
-		self:OpenOptions()
-	end)
-	settingsBtn:SetScript('OnEnter', function(btn)
-		GameTooltip:SetOwner(btn, 'ANCHOR_BOTTOM')
-		GameTooltip:AddLine('Options')
-		GameTooltip:Show()
-	end)
-	settingsBtn:SetScript('OnLeave', function()
-		GameTooltip:Hide()
-	end)
-
-	-- Grouping dropdown (LibAT or fallback)
-	if LibAT and LibAT.UI and LibAT.UI.CreateDropdown then
-		local groupDropdown = LibAT.UI.CreateDropdown(frame, 'Group: Class', 140, 22)
-		groupDropdown:SetPoint('TOPLEFT', frame, 'TOPLEFT', 12, -10)
-		groupDropdown:SetupMenu(function(_, rootDescription)
-			for _, item in ipairs(GROUPBY_ITEMS) do
-				local button = rootDescription:CreateButton(item.label, function()
-					self.db.display.groupBy = item.key
-					groupDropdown:SetText('Group: ' .. item.label)
-					self:UpdatePopup()
-				end)
-				if self.db.display.groupBy == item.key then
-					button:SetRadio(true)
-				end
-			end
-		end)
-		frame.groupDropdown = groupDropdown
-	else
-		-- Fallback: simple cycle button if LibAT not available
-		local groupBtn = CreateFrame('Button', nil, frame, 'UIPanelButtonTemplate')
-		groupBtn:SetSize(140, 22)
-		groupBtn:SetPoint('TOPLEFT', frame, 'TOPLEFT', 12, -10)
-		groupBtn:SetText('Group: Class')
-		groupBtn:SetScript('OnClick', function()
-			local current = self.db.display.groupBy or 'class'
-			for i, item in ipairs(GROUPBY_ITEMS) do
-				if item.key == current then
-					local nextItem = GROUPBY_ITEMS[i < #GROUPBY_ITEMS and i + 1 or 1]
-					self.db.display.groupBy = nextItem.key
-					groupBtn:SetText('Group: ' .. nextItem.label)
-					self:UpdatePopup()
-					return
-				end
-			end
-		end)
-		frame.groupDropdown = groupBtn
-	end
-
-	-- Scroll frame
-	local scrollFrame = CreateFrame('ScrollFrame', 'LibsTimePlayedPopupScroll', frame, 'UIPanelScrollFrameTemplate')
-	scrollFrame:SetPoint('TOPLEFT', frame, 'TOPLEFT', 8, -38)
-	scrollFrame:SetPoint('BOTTOMRIGHT', frame, 'BOTTOMRIGHT', -28, 52)
-
-	local scrollChild = CreateFrame('Frame', nil, scrollFrame)
-	scrollChild:SetWidth(scrollFrame:GetWidth())
-	scrollChild:SetHeight(1) -- will be set dynamically
-	scrollFrame:SetScrollChild(scrollChild)
-
-	-- Store the scrollbar reference
-	scrollFrame.scrollBar = _G['LibsTimePlayedPopupScrollScrollBar']
-
-	-- Mouse wheel scrolling
-	scrollFrame:EnableMouseWheel(true)
-	scrollFrame:SetScript('OnMouseWheel', function(sf, delta)
-		local current = sf:GetVerticalScroll()
-		local maxScroll = sf:GetVerticalScrollRange()
-		local newScroll = current - (delta * 20)
-		newScroll = math.max(0, math.min(newScroll, maxScroll))
-		sf:SetVerticalScroll(newScroll)
-	end)
-
-	frame.scrollFrame = scrollFrame
-	frame.scrollChild = scrollChild
-
-	-- Pre-allocate rows
-	for i = 1, MAX_ROWS do
-		local row = CreateRow(scrollChild, scrollChild:GetWidth())
-		row:Hide()
-		rows[i] = row
-	end
-
-	-- Total row at bottom
-	local totalText = frame:CreateFontString(nil, 'OVERLAY', 'GameFontNormal')
-	totalText:SetPoint('BOTTOMLEFT', frame, 'BOTTOMLEFT', 12, 10)
-	totalText:SetTextColor(1, 0.82, 0)
-	frame.totalText = totalText
-
-	-- Milestone text above total
-	local milestoneText = frame:CreateFontString(nil, 'OVERLAY', 'GameFontNormalSmall')
-	milestoneText:SetPoint('BOTTOMLEFT', frame, 'BOTTOMLEFT', 12, 28)
-	milestoneText:SetPoint('BOTTOMRIGHT', frame, 'BOTTOMRIGHT', -12, 28)
-	milestoneText:SetJustifyH('LEFT')
-	milestoneText:SetTextColor(0.7, 0.7, 0.7)
-	frame.milestoneText = milestoneText
-
-	-- Handle resize
-	frame:SetScript('OnSizeChanged', function()
-		self:UpdatePopupLayout()
-	end)
-
-	frame:Hide()
-	popupFrame = frame
-	return frame
-end
-
----Update layout after resize
-function LibsTimePlayed:UpdatePopupLayout()
-	if not popupFrame then
-		return
-	end
-
-	local contentWidth = popupFrame.scrollFrame:GetWidth()
-	popupFrame.scrollChild:SetWidth(contentWidth)
-
-	for i = 1, MAX_ROWS do
-		if rows[i] then
-			rows[i]:SetWidth(contentWidth)
+	for _, data in pairs(LibsTimePlayed.globaldb.characters) do
+		if data.faction == 'Alliance' then
+			hasAlliance = true
+		elseif data.faction == 'Horde' then
+			hasHorde = true
+		end
+		if hasAlliance and hasHorde then
+			return true
 		end
 	end
 
-	UpdateScrollBarVisibility(popupFrame.scrollFrame)
+	return false
 end
 
----Configure a row as a group row
+---Setup a group row
 ---@param row Frame
 ---@param group table
 ---@param barPercent number
 ---@param percent number
 ---@param isExpanded boolean
----@param hasChars boolean Whether the group has multiple characters
+---@param hasChars boolean
 local function SetupGroupRow(row, group, barPercent, percent, isExpanded, hasChars)
-	local color = group.color
 	row:SetHeight(ROW_HEIGHT)
 
-	-- Expand indicator
+	-- Expand/collapse indicator
 	if hasChars then
-		row.expandIcon:SetText(isExpanded and '-' or '+')
+		row.expandIcon:SetText(isExpanded and '▼' or '▶')
 		row.expandIcon:SetTextColor(0.8, 0.8, 0.8)
 	else
 		row.expandIcon:SetText('')
 	end
 
-	-- Label
+	-- Faction icon (only show if player plays both factions and this is faction grouping)
+	local groupBy = LibsTimePlayed.db.display.groupBy or 'class'
+	local showFactionIcon = groupBy ~= 'faction' and PlaysBothFactions()
+
+	if showFactionIcon then
+		-- Determine faction for this group
+		local factionForGroup = nil
+		if #group.chars > 0 then
+			-- Use the first character's faction as representative
+			factionForGroup = group.chars[1].faction
+		end
+
+		if factionForGroup and FACTION_ATLAS[factionForGroup] then
+			row.factionIcon:SetAtlas(FACTION_ATLAS[factionForGroup])
+			row.factionIcon:Show()
+		else
+			row.factionIcon:Hide()
+		end
+	else
+		row.factionIcon:Hide()
+	end
+
+	-- Group label
 	row.label:SetText(group.label)
-	row.label:SetTextColor(color.r, color.g, color.b)
-	row.label:SetWidth(90)
+	row.label:SetTextColor(group.color.r, group.color.g, group.color.b)
 
 	-- Bar
 	row.bar:SetValue(barPercent)
-	row.bar:SetStatusBarColor(color.r, color.g, color.b, 0.8)
+	row.bar:SetStatusBarColor(group.color.r, group.color.g, group.color.b, 0.8)
 	row.bar:Show()
 
 	-- Percent
-	row.percentText:SetText(string.format('%.1f%%', percent))
+	row.percentText:SetText(string.format('%.0f%%', percent))
 	row.percentText:SetTextColor(0.8, 0.8, 0.8)
 
 	-- Value
 	row.valueText:SetText(LibsTimePlayed.FormatTime(group.total, 'smart'))
-	row.valueText:SetTextColor(1, 1, 1)
+	row.valueText:SetTextColor(0.9, 0.9, 0.9)
 
-	-- Store group data for click/hover
+	-- Mark as group row
 	row.groupData = group
 	row.isGroupRow = true
 	row.isCharRow = false
@@ -372,17 +210,25 @@ local function SetupGroupRow(row, group, barPercent, percent, isExpanded, hasCha
 	row:Show()
 end
 
----Configure a row as a character detail row (indented under group)
+---Setup a character row
 ---@param row Frame
 ---@param char table
 ---@param groupBy string
----@param groupTotal number Total played time for the parent group
----@param groupColor table Color of the parent group {r, g, b}
+---@param groupTotal number
+---@param groupColor table
 local function SetupCharRow(row, char, groupBy, groupTotal, groupColor)
 	row:SetHeight(CHAR_ROW_HEIGHT)
 
 	-- No expand indicator for char rows
 	row.expandIcon:SetText('')
+
+	-- Faction icon for character rows (if player plays both factions)
+	if PlaysBothFactions() and char.faction and FACTION_ATLAS[char.faction] then
+		row.factionIcon:SetAtlas(FACTION_ATLAS[char.faction])
+		row.factionIcon:Show()
+	else
+		row.factionIcon:Hide()
+	end
 
 	-- Character name with indent
 	local cr, cg, cb = 0.7, 0.7, 0.7
@@ -397,7 +243,7 @@ local function SetupCharRow(row, char, groupBy, groupTotal, groupColor)
 
 	row.label:SetText('    ' .. char.name .. ' (' .. char.level .. ')')
 	row.label:SetTextColor(cr, cg, cb)
-	row.label:SetWidth(200)
+	row.label:SetWidth(90)
 
 	-- Bar showing character's proportion of the group total
 	local charPercent = groupTotal > 0 and (char.totalPlayed / groupTotal) or 0
@@ -421,19 +267,166 @@ local function SetupCharRow(row, char, groupBy, groupTotal, groupColor)
 	row:Show()
 end
 
+---Create the popup window frame using LibAT.UI
+---@return Frame
+function LibsTimePlayed:CreatePopup()
+	if popupFrame then
+		return popupFrame
+	end
+
+	-- Check if LibAT.UI is available
+	if not LibAT or not LibAT.UI or not LibAT.UI.CreateWindow then
+		self:Log('LibAT.UI not available, cannot create popup window', 'error')
+		return nil
+	end
+
+	-- Create window using LibAT.UI
+	local window = LibAT.UI.CreateWindow({
+		name = 'LibsTimePlayedPopup',
+		title = 'Time Played',
+		width = self.db.popup.width or 520,
+		height = self.db.popup.height or 300,
+		hidePortrait = true,
+	})
+
+	-- Create control frame for dropdown
+	local controlFrame = LibAT.UI.CreateControlFrame(window)
+
+	-- Group By dropdown
+	local groupDropdown = CreateFrame('Frame', 'LibsTimePlayedGroupDropdown', controlFrame, 'UIDropDownMenuTemplate')
+	groupDropdown:SetPoint('LEFT', controlFrame, 'LEFT', -10, 0)
+	UIDropDownMenu_SetWidth(groupDropdown, 130)
+
+	UIDropDownMenu_Initialize(groupDropdown, function(self, level)
+		local info = UIDropDownMenu_CreateInfo()
+		for _, item in ipairs(GROUPBY_ITEMS) do
+			info.text = item.label
+			info.value = item.key
+			info.func = function()
+				LibsTimePlayed.db.display.groupBy = item.key
+				UIDropDownMenu_SetSelectedValue(groupDropdown, item.key)
+				LibsTimePlayed:UpdatePopup()
+			end
+			info.checked = (LibsTimePlayed.db.display.groupBy == item.key)
+			UIDropDownMenu_AddButton(info, level)
+		end
+	end)
+
+	local currentGroupBy = self.db.display.groupBy or 'class'
+	UIDropDownMenu_SetSelectedValue(groupDropdown, currentGroupBy)
+	UIDropDownMenu_SetText(groupDropdown, 'Group: ' .. GROUPBY_LABELS[currentGroupBy])
+
+	window.groupDropdown = groupDropdown
+
+	-- Create content area below control frame
+	local contentFrame = LibAT.UI.CreateContentFrame(window, controlFrame)
+
+	-- Create scroll frame using LibAT.UI (modern scrollbar)
+	local scrollFrame = LibAT.UI.CreateScrollFrame(contentFrame)
+	scrollFrame:SetPoint('TOPLEFT', contentFrame, 'TOPLEFT', 4, 0)
+	scrollFrame:SetPoint('BOTTOMRIGHT', contentFrame, 'BOTTOMRIGHT', -4, 40)
+
+	-- Create scroll child
+	local scrollChild = CreateFrame('Frame', nil, scrollFrame)
+	scrollChild:SetWidth(1) -- Will be set dynamically
+	scrollChild:SetHeight(1) -- Will be set dynamically based on content
+	scrollFrame:SetScrollChild(scrollChild)
+
+	window.scrollFrame = scrollFrame
+	window.scrollChild = scrollChild
+
+	-- Create row pool
+	for i = 1, MAX_ROWS do
+		local row = CreateRow(scrollChild, scrollFrame:GetWidth() - 20)
+		row:Hide()
+		rows[i] = row
+	end
+
+	-- Total text (bottom)
+	local totalText = window:CreateFontString(nil, 'OVERLAY', 'GameFontHighlight')
+	totalText:SetPoint('BOTTOMLEFT', window, 'BOTTOMLEFT', 20, 16)
+	totalText:SetJustifyH('LEFT')
+	window.totalText = totalText
+
+	-- Milestone text (bottom right)
+	local milestoneText = window:CreateFontString(nil, 'OVERLAY', 'GameFontNormalSmall')
+	milestoneText:SetPoint('BOTTOMRIGHT', window, 'BOTTOMRIGHT', -20, 16)
+	milestoneText:SetPoint('LEFT', totalText, 'RIGHT', 10, 0)
+	milestoneText:SetJustifyH('RIGHT')
+	milestoneText:SetTextColor(0.7, 0.7, 0.7)
+	milestoneText:SetWordWrap(false)
+	window.milestoneText = milestoneText
+
+	-- Store config on hide
+	window:SetScript('OnHide', function()
+		local point, _, _, x, y = window:GetPoint()
+		self.db.popup.point = point or 'CENTER'
+		self.db.popup.x = x or 0
+		self.db.popup.y = y or 0
+		self.db.popup.width = window:GetWidth()
+		self.db.popup.height = window:GetHeight()
+	end)
+
+	popupFrame = window
+	return window
+end
+
 ---Populate the popup with current data
 function LibsTimePlayed:UpdatePopup()
 	if not popupFrame then
 		return
 	end
 
-	local sortedGroups, accountTotal = self:GetGroupedData()
 	local groupBy = self.db.display.groupBy or 'class'
 
-	-- Update title and dropdown text
-	popupFrame.title:SetText("Lib's TimePlayed - By " .. GROUPBY_LABELS[groupBy])
+	-- Update dropdown text
 	if popupFrame.groupDropdown then
-		popupFrame.groupDropdown:SetText('Group: ' .. GROUPBY_LABELS[groupBy])
+		UIDropDownMenu_SetText(popupFrame.groupDropdown, 'Group: ' .. GROUPBY_LABELS[groupBy])
+	end
+
+	-- Get data
+	local sortedGroups, accountTotal
+
+	if groupBy == 'none' then
+		-- Raw character list - create a single "All Characters" group
+		sortedGroups = {}
+		accountTotal = 0
+
+		local allChars = {}
+		for charKey, data in pairs(self.globaldb.characters) do
+			if type(data) == 'table' and data.totalPlayed and data.classFile then
+				local char = {
+					key = charKey,
+					name = data.name or charKey,
+					realm = data.realm or '',
+					class = data.class or data.classFile,
+					classFile = data.classFile,
+					faction = data.faction or 'Neutral',
+					level = data.level or 0,
+					totalPlayed = data.totalPlayed,
+					levelPlayed = data.levelPlayed or 0,
+					lastUpdated = data.lastUpdated or 0,
+				}
+				table.insert(allChars, char)
+				accountTotal = accountTotal + data.totalPlayed
+			end
+		end
+
+		-- Sort by totalPlayed descending
+		table.sort(allChars, function(a, b)
+			return a.totalPlayed > b.totalPlayed
+		end)
+
+		-- Create single group
+		table.insert(sortedGroups, {
+			key = 'all',
+			label = 'All Characters',
+			color = { r = 0.8, g = 0.8, b = 0.8 },
+			chars = allChars,
+			total = accountTotal,
+		})
+	else
+		sortedGroups, accountTotal = self:GetGroupedData(groupBy)
 	end
 
 	-- Find top group total for bar scaling
@@ -524,13 +517,15 @@ function LibsTimePlayed:UpdatePopup()
 	else
 		popupFrame.milestoneText:Hide()
 	end
-
-	UpdateScrollBarVisibility(popupFrame.scrollFrame)
 end
 
 ---Toggle popup visibility
 function LibsTimePlayed:TogglePopup()
 	local frame = self:CreatePopup()
+	if not frame then
+		return
+	end
+
 	if frame:IsShown() then
 		frame:Hide()
 	else
