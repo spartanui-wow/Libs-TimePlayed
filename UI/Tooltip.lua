@@ -90,8 +90,11 @@ function LibsTimePlayed:BuildTooltip(anchorFrame)
 
 			if showBars then
 				-- Use cell background colors as visual bar
-				row:GetCell(2):SetText(' '):SetMinWidth(math.floor(barPercent * 80 + 0.5)):SetColor(r, g, b, 0.7)
-				row:GetCell(3):SetText(' '):SetMinWidth(math.max(1, 80 - math.floor(barPercent * 80 + 0.5))):SetColor(0.15, 0.15, 0.15, 0.5)
+				-- SetMinWidth must be set before SetText so OnContentChanged uses the correct minimum
+				local fillWidth = math.max(1, math.floor(barPercent * 80 + 0.5))
+				local emptyWidth = math.max(1, 80 - fillWidth)
+				row:GetCell(2):SetMinWidth(fillWidth):SetText(' '):SetColor(r, g, b, 0.7)
+				row:GetCell(3):SetMinWidth(emptyWidth):SetText(' '):SetColor(0.15, 0.15, 0.15, 0.5)
 			else
 				row:GetCell(2):SetText('')
 				row:GetCell(3):SetText('')

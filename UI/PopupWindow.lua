@@ -351,7 +351,9 @@ end
 ---@param row Frame
 ---@param char table
 ---@param groupBy string
-local function SetupCharRow(row, char, groupBy)
+---@param groupTotal number Total played time for the parent group
+---@param groupColor table Color of the parent group {r, g, b}
+local function SetupCharRow(row, char, groupBy, groupTotal, groupColor)
 	row:SetHeight(CHAR_ROW_HEIGHT)
 
 	-- No expand indicator for char rows
@@ -364,17 +366,23 @@ local function SetupCharRow(row, char, groupBy)
 		if charColor then
 			cr, cg, cb = charColor.r, charColor.g, charColor.b
 		end
+	else
+		cr, cg, cb = groupColor.r, groupColor.g, groupColor.b
 	end
 
 	row.label:SetText('    ' .. char.name .. ' (' .. char.level .. ')')
 	row.label:SetTextColor(cr, cg, cb)
 	row.label:SetWidth(200)
 
-	-- Hide bar for char rows
-	row.bar:Hide()
+	-- Bar showing character's proportion of the group total
+	local charPercent = groupTotal > 0 and (char.totalPlayed / groupTotal) or 0
+	row.bar:SetValue(charPercent)
+	row.bar:SetStatusBarColor(cr, cg, cb, 0.5)
+	row.bar:Show()
 
-	-- No percent for char rows
-	row.percentText:SetText('')
+	-- Percent of group
+	row.percentText:SetText(string.format('%.0f%%', charPercent * 100))
+	row.percentText:SetTextColor(0.6, 0.6, 0.6)
 
 	-- Time value
 	row.valueText:SetText(LibsTimePlayed.FormatTime(char.totalPlayed, 'smart'))
@@ -460,7 +468,7 @@ function LibsTimePlayed:UpdatePopup()
 				local charRow = rows[rowIndex]
 				charRow:ClearAllPoints()
 				charRow:SetPoint('TOPLEFT', popupFrame.scrollChild, 'TOPLEFT', 0, -yOffset)
-				SetupCharRow(charRow, char, groupBy)
+				SetupCharRow(charRow, char, groupBy, group.total, group.color)
 
 				-- No special click/hover for char rows
 				charRow:SetScript('OnMouseDown', nil)
