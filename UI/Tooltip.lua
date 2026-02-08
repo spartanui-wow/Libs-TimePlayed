@@ -1,9 +1,7 @@
 ---@class LibsTimePlayed
 local LibsTimePlayed = LibStub('AceAddon-3.0'):GetAddon('Libs-TimePlayed')
 
-local BAR_WIDTH = 15
-local FILL_CHAR = '|'
-local DARK_COLOR = '|cff333333'
+local LibQTip = LibStub('LibQTip-1.0')
 
 local GROUPBY_LABELS = {
 	class = 'Class',
@@ -11,7 +9,9 @@ local GROUPBY_LABELS = {
 	faction = 'Faction',
 }
 
----Build a text-based bar using colored pipe characters
+local BAR_WIDTH = 12
+
+---Build a text bar using block characters that don't conflict with WoW escape codes
 ---@param fillPercent number 0-1
 ---@param r number
 ---@param g number
@@ -23,33 +23,63 @@ local function BuildTextBar(fillPercent, r, g, b)
 	local empty = BAR_WIDTH - filled
 
 	local colorHex = string.format('|cff%02x%02x%02x', r * 255, g * 255, b * 255)
-	local bar = colorHex .. string.rep(FILL_CHAR, filled) .. '|r'
+	local bar = colorHex .. string.rep('\226\150\136', filled) .. '|r' -- UTF-8 full block character U+2588
 	if empty > 0 then
-		bar = bar .. DARK_COLOR .. string.rep(FILL_CHAR, empty) .. '|r'
+		bar = bar .. '|cff333333' .. string.rep('\226\150\136', empty) .. '|r'
 	end
 	return bar
 end
 
-function LibsTimePlayed:BuildTooltip(tooltip)
-	tooltip:SetText("Lib's TimePlayed")
+---Format a color into a WoW color escape string
+---@param r number
+---@param g number
+---@param b number
+---@param text string
+---@return string
+local function ColorText(r, g, b, text)
+	return string.format('|cff%02x%02x%02x%s|r', r * 255, g * 255, b * 255, text)
+end
+
+---@param anchorFrame Frame
+---@return table tooltip The LibQTip tooltip
+function LibsTimePlayed:BuildTooltip(anchorFrame)
+	local tooltip = LibQTip:Acquire('LibsTimePlayedTooltip', 4, 'LEFT', 'LEFT', 'RIGHT', 'RIGHT')
+	tooltip:Clear()
+
+	-- Title
+	local line = tooltip:AddHeader()
+	tooltip:SetCell(line, 1, "Lib's TimePlayed", 'CENTER', 4)
 
 	if not self:HasPlayedData() then
-		tooltip:AddLine('Waiting for /played data...', 0.7, 0.7, 0.7)
+		line = tooltip:AddLine()
+		tooltip:SetCell(line, 1, ColorText(0.7, 0.7, 0.7, 'Waiting for /played data...'), 'CENTER', 4)
+		tooltip:SmartAnchorTo(anchorFrame)
+		tooltip:SetAutoHideDelay(0.1, anchorFrame)
 		tooltip:Show()
-		return
+		return tooltip
 	end
 
 	-- Current character info
 	local name = UnitName('player')
 	local _, classFile = UnitClass('player')
 	local color = RAID_CLASS_COLORS[classFile]
-	local coloredName = color and string.format('|cff%02x%02x%02x%s|r', color.r * 255, color.g * 255, color.b * 255, name) or name
+	local coloredName = color and ColorText(color.r, color.g, color.b, name) or name
 
-	tooltip:AddLine(' ')
-	tooltip:AddDoubleLine(coloredName .. ' (Lv ' .. UnitLevel('player') .. ')', '', 1, 1, 1)
-	tooltip:AddDoubleLine('  Total:', self.FormatTime(self:GetTotalPlayed(), 'full'), 0.8, 0.8, 0.8, 1, 1, 1)
-	tooltip:AddDoubleLine('  This Level:', self.FormatTime(self:GetLevelPlayed(), 'full'), 0.8, 0.8, 0.8, 1, 1, 1)
-	tooltip:AddDoubleLine('  Session:', self.FormatTime(self:GetSessionTime(), 'full'), 0.8, 0.8, 0.8, 1, 1, 1)
+	tooltip:AddSeparator()
+	line = tooltip:AddLine()
+	tooltip:SetCell(line, 1, coloredName .. ' (Lv ' .. UnitLevel('player') .. ')', 'LEFT', 2)
+
+	line = tooltip:AddLine()
+	tooltip:SetCell(line, 1, ColorText(0.8, 0.8, 0.8, '  Total:'), 'LEFT', 2)
+	tooltip:SetCell(line, 3, self.FormatTime(self:GetTotalPlayed(), 'full'), 'RIGHT', 2)
+
+	line = tooltip:AddLine()
+	tooltip:SetCell(line, 1, ColorText(0.8, 0.8, 0.8, '  This Level:'), 'LEFT', 2)
+	tooltip:SetCell(line, 3, self.FormatTime(self:GetLevelPlayed(), 'full'), 'RIGHT', 2)
+
+	line = tooltip:AddLine()
+	tooltip:SetCell(line, 1, ColorText(0.8, 0.8, 0.8, '  Session:'), 'LEFT', 2)
+	tooltip:SetCell(line, 3, self.FormatTime(self:GetSessionTime(), 'full'), 'RIGHT', 2)
 
 	-- Account summary using GetGroupedData
 	local sortedGroups, accountTotal = self:GetGroupedData()
@@ -57,10 +87,14 @@ function LibsTimePlayed:BuildTooltip(tooltip)
 	local showBars = self.db.display.showBarsInTooltip
 
 	if accountTotal > 0 then
-		tooltip:AddLine(' ')
-		tooltip:AddDoubleLine('Account Total', self.FormatTime(accountTotal, 'smart'), 1, 0.82, 0, 1, 1, 1)
-		tooltip:AddLine(' ')
-		tooltip:AddLine('Grouped by: ' .. GROUPBY_LABELS[groupBy], 0.5, 0.5, 0.5)
+		tooltip:AddSeparator()
+
+		line = tooltip:AddLine()
+		tooltip:SetCell(line, 1, ColorText(1, 0.82, 0, 'Account Total'), 'LEFT', 2)
+		tooltip:SetCell(line, 3, ColorText(1, 1, 1, self.FormatTime(accountTotal, 'smart')), 'RIGHT', 2)
+
+		line = tooltip:AddLine()
+		tooltip:SetCell(line, 1, ColorText(0.5, 0.5, 0.5, 'Grouped by: ' .. GROUPBY_LABELS[groupBy]), 'LEFT', 4)
 
 		-- Find top group total for bar scaling
 		local topGroupTotal = sortedGroups[1] and sortedGroups[1].total or 0
@@ -73,20 +107,18 @@ function LibsTimePlayed:BuildTooltip(tooltip)
 			local percent = accountTotal > 0 and (group.total / accountTotal * 100) or 0
 			local barPercent = topGroupTotal > 0 and (group.total / topGroupTotal) or 0
 
-			-- Group header with optional bar
-			local headerLeft
+			line = tooltip:AddLine()
+			tooltip:SetCell(line, 1, ColorText(r, g, b, group.label), 'LEFT')
 			if showBars then
-				local bar = BuildTextBar(barPercent, r, g, b)
-				headerLeft = string.format('%s %s %.0f%%', group.label, bar, percent)
+				tooltip:SetCell(line, 2, BuildTextBar(barPercent, r, g, b), 'LEFT')
 			else
-				headerLeft = string.format('%s (%.0f%%)', group.label, percent)
+				tooltip:SetCell(line, 2, '', 'LEFT')
 			end
-			tooltip:AddDoubleLine(headerLeft, self.FormatTime(group.total, 'smart'), r, g, b, 0.8, 0.8, 0.8)
+			tooltip:SetCell(line, 3, ColorText(0.8, 0.8, 0.8, string.format('%.0f%%', percent)), 'RIGHT')
+			tooltip:SetCell(line, 4, ColorText(0.8, 0.8, 0.8, self.FormatTime(group.total, 'smart')), 'RIGHT')
 
 			-- Individual characters under each group
 			for _, char in ipairs(group.chars) do
-				local charLabel = string.format('  %s (%d)', char.name, char.level)
-				-- When grouping by realm or faction, color character names by class
 				local cr, cg, cb = 0.6, 0.6, 0.6
 				if groupBy ~= 'class' then
 					local charColor = RAID_CLASS_COLORS[char.classFile]
@@ -94,7 +126,10 @@ function LibsTimePlayed:BuildTooltip(tooltip)
 						cr, cg, cb = charColor.r, charColor.g, charColor.b
 					end
 				end
-				tooltip:AddDoubleLine(charLabel, self.FormatTime(char.totalPlayed, 'smart'), cr, cg, cb, 0.6, 0.6, 0.6)
+
+				line = tooltip:AddLine()
+				tooltip:SetCell(line, 1, ColorText(cr, cg, cb, '  ' .. char.name .. ' (' .. char.level .. ')'), 'LEFT', 3)
+				tooltip:SetCell(line, 4, ColorText(0.6, 0.6, 0.6, self.FormatTime(char.totalPlayed, 'smart')), 'RIGHT')
 			end
 		end
 
@@ -102,19 +137,27 @@ function LibsTimePlayed:BuildTooltip(tooltip)
 		if self.GetMilestones and self.db.display.showMilestones then
 			local milestones = self:GetMilestones(sortedGroups, accountTotal)
 			if #milestones > 0 then
-				tooltip:AddLine(' ')
+				tooltip:AddSeparator()
 				for _, milestone in ipairs(milestones) do
-					tooltip:AddLine(milestone, 0.7, 0.7, 0.7)
+					line = tooltip:AddLine()
+					tooltip:SetCell(line, 1, ColorText(0.7, 0.7, 0.7, milestone), 'LEFT', 4)
 				end
 			end
 		end
 	end
 
 	-- Click hints
-	tooltip:AddLine(' ')
-	tooltip:AddLine('|cffffff00Left Click:|r Cycle Format (total/session/level)')
-	tooltip:AddLine('|cffffff00Shift+Left:|r Toggle Window | |cffffff00Right:|r Options')
-	tooltip:AddLine('|cffffff00Middle Click:|r Refresh /played')
+	tooltip:AddSeparator()
+	line = tooltip:AddLine()
+	tooltip:SetCell(line, 1, ColorText(1, 1, 0, 'Left Click:') .. ' Cycle Format', 'LEFT', 4)
+	line = tooltip:AddLine()
+	tooltip:SetCell(line, 1, ColorText(1, 1, 0, 'Shift+Left:') .. ' Toggle Window  ' .. ColorText(1, 1, 0, 'Right:') .. ' Options', 'LEFT', 4)
+	line = tooltip:AddLine()
+	tooltip:SetCell(line, 1, ColorText(1, 1, 0, 'Middle Click:') .. ' Refresh /played', 'LEFT', 4)
 
+	tooltip:SmartAnchorTo(anchorFrame)
+	tooltip:SetAutoHideDelay(0.1, anchorFrame)
 	tooltip:Show()
+
+	return tooltip
 end
