@@ -28,6 +28,31 @@ function LibsTimePlayed:OnEnable()
 	self:InitializeMinimapButton()
 	self:InitializeOptions()
 
+	-- Register with Addon Compartment (10.x+ dropdown)
+	if AddonCompartmentFrame and AddonCompartmentFrame.RegisterAddon then
+		AddonCompartmentFrame:RegisterAddon({
+			text = "Lib's TimePlayed",
+			icon = 'Interface/Icons/INV_Misc_PocketWatch_01',
+			registerForAnyClick = true,
+			notCheckable = true,
+			func = function(_, _, _, _, mouseButton)
+				if mouseButton == 'LeftButton' then
+					self:TogglePopup()
+				else
+					self:OpenOptions()
+				end
+			end,
+			funcOnEnter = function()
+				GameTooltip:SetOwner(AddonCompartmentFrame, 'ANCHOR_CURSOR_RIGHT')
+				GameTooltip:AddLine("|cffffffffLib's|r |cffe21f1fTimePlayed|r", 1, 1, 1)
+				GameTooltip:AddLine(' ')
+				GameTooltip:AddLine('|cffeda55fLeft-Click|r to toggle popup window.', 1, 1, 1)
+				GameTooltip:AddLine('|cffeda55fRight-Click|r to open options.', 1, 1, 1)
+				GameTooltip:Show()
+			end,
+		})
+	end
+
 	-- Check for first-time import after a short delay (let other addons load)
 	self:ScheduleTimer('CheckFirstTimeImport', 3)
 
