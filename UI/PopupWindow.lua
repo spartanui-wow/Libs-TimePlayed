@@ -1,6 +1,8 @@
 ---@class LibsTimePlayed
 local LibsTimePlayed = LibStub('AceAddon-3.0'):GetAddon('Libs-TimePlayed')
 
+local LibQTip = LibStub('LibQTip-2.0')
+
 local DEFAULT_FONT_SIZE = 10
 local MAX_ROWS = 120
 local STREAK_PANE_WIDTH = 188 -- 7 cols * 22px + 4px padding + 30px scrollbar/margin
@@ -40,6 +42,57 @@ local FACTION_ATLAS = {
 local rows = {}
 local popupFrame
 local expandedGroups = {} -- tracks which groups are expanded by key
+
+---Check which external addons (AltVault, Altoholic) have a character
+---@param charName string Character name
+---@param charRealm string Realm name
+---@return string[] sources List of addon names that have this character
+local function GetExternalSourcesForChar(charName, charRealm)
+	local sources = {}
+	-- Check AltVault
+	if _G.AltVaultDB and _G.AltVaultDB.characters then
+		for _, entry in pairs(_G.AltVaultDB.characters) do
+			if type(entry) == 'table' and entry.character and entry.character.name == charName and entry.character.realm == charRealm then
+				table.insert(sources, 'AltVault')
+				break
+			end
+		end
+	end
+	-- Check Altoholic
+	if _G.DataStore_CharacterDB and _G.DataStore_CharacterDB.global and _G.DataStore_CharacterDB.global.Characters then
+		local altKey = 'Default.' .. charRealm .. '.' .. charName
+		if _G.DataStore_CharacterDB.global.Characters[altKey] then
+			table.insert(sources, 'Altoholic')
+		end
+	end
+	return sources
+end
+
+---Delete a character from AltVault's database
+---@param charName string Character name
+---@param charRealm string Realm name
+local function DeleteFromAltVault(charName, charRealm)
+	if not _G.AltVaultDB or not _G.AltVaultDB.characters then
+		return
+	end
+	for key, entry in pairs(_G.AltVaultDB.characters) do
+		if type(entry) == 'table' and entry.character and entry.character.name == charName and entry.character.realm == charRealm then
+			_G.AltVaultDB.characters[key] = nil
+			return
+		end
+	end
+end
+
+---Delete a character from Altoholic's database
+---@param charName string Character name
+---@param charRealm string Realm name
+local function DeleteFromAltoholic(charName, charRealm)
+	if not _G.DataStore_CharacterDB or not _G.DataStore_CharacterDB.global or not _G.DataStore_CharacterDB.global.Characters then
+		return
+	end
+	local altKey = 'Default.' .. charRealm .. '.' .. charName
+	_G.DataStore_CharacterDB.global.Characters[altKey] = nil
+end
 
 ---Apply the configured font size to a FontString
 ---@param fontString FontString
@@ -606,9 +659,11 @@ function LibsTimePlayed:UpdatePopup()
 		row:SetPoint('TOPLEFT', popupFrame.scrollChild, 'TOPLEFT', 0, -yOffset)
 		SetupGroupRow(row, group, barPercent, percent, isExpanded, hasChars)
 
-		-- Click handler for expand/collapse
-		row:SetScript('OnMouseDown', function()
-			if hasChars then
+		-- Click handler for expand/collapse + right-click delete for single-char groups
+		row:SetScript('OnMouseDown', function(_, button)
+			if button == 'RightButton' and #group.chars == 1 then
+				self:ShowCharacterContextMenu(row, group.chars[1])
+			elseif button == 'LeftButton' and hasChars then
 				expandedGroups[group.key] = not expandedGroups[group.key]
 				self:UpdatePopup()
 			end
@@ -639,8 +694,12 @@ function LibsTimePlayed:UpdatePopup()
 				charRow:SetPoint('TOPLEFT', popupFrame.scrollChild, 'TOPLEFT', 0, -yOffset)
 				SetupCharRow(charRow, char, groupBy, group.total, group.color)
 
-				-- No special click/hover for char rows
-				charRow:SetScript('OnMouseDown', nil)
+				-- Right-click to delete character
+				charRow:SetScript('OnMouseDown', function(_, button)
+					if button == 'RightButton' then
+						self:ShowCharacterContextMenu(charRow, char)
+					end
+				end)
 				charRow:SetScript('OnEnter', nil)
 				charRow:SetScript('OnLeave', nil)
 
@@ -694,6 +753,174 @@ function LibsTimePlayed:ApplyFontSize()
 
 	-- Refresh layout with new row heights
 	self:UpdatePopup()
+end
+
+---Show a right-click context menu for a character using LibQTip-2.0
+---@param anchor Frame The frame to anchor the menu to
+---@param char table Character data with key, name, realm fields
+function LibsTimePlayed:ShowCharacterContextMenu(anchor, char)
+	-- Don't allow deleting current character
+	local currentKey = GetNormalizedRealmName() .. '-' .. UnitName('player')
+	if char.key == currentKey then
+		return
+	end
+
+	-- Release any previous context menu tooltip
+	if self.contextMenuTooltip then
+		LibQTip:ReleaseTooltip(self.contextMenuTooltip)
+		self.contextMenuTooltip = nil
+	end
+
+	local tooltip = LibQTip:AcquireTooltip('LibsTPContextMenu', 1, 'LEFT')
+	self.contextMenuTooltip = tooltip
+	tooltip:Clear()
+
+	-- Title row (character name)
+	local titleRow = tooltip:AddHeadingRow()
+	titleRow:GetCell(1):SetText(char.name .. ' - ' .. char.realm)
+
+	-- Delete button row
+	local deleteRow = tooltip:AddRow()
+	local deleteCell = deleteRow:GetCell(1)
+	deleteCell:SetText('|cffff4444Delete Character|r')
+	deleteCell:SetScript('OnMouseDown', function()
+		LibQTip:ReleaseTooltip(tooltip)
+		self.contextMenuTooltip = nil
+		self:HandleDeleteCharacter(char)
+	end)
+
+	tooltip:SmartAnchorTo(anchor)
+	tooltip:SetAutoHideDelay(0.25, anchor)
+	tooltip:Show()
+end
+
+---Handle character deletion, checking for external addon data
+---@param char table Character data with key, name, realm fields
+function LibsTimePlayed:HandleDeleteCharacter(char)
+	local externalSources = GetExternalSourcesForChar(char.name, char.realm)
+
+	if #externalSources == 0 then
+		-- No external addons — delete immediately, no confirmation
+		self.globaldb.characters[char.key] = nil
+		self:Print('Removed ' .. char.name .. ' - ' .. char.realm)
+		self:UpdatePopup()
+	else
+		-- External addons found — show confirmation dialog
+		self:ShowDeleteConfirmDialog(char, externalSources)
+	end
+end
+
+---Show a confirmation dialog when external addons have the character
+---Uses the same visual style as the import dialog in Import.lua
+---@param char table Character data with key, name, realm fields
+---@param externalSources string[] List of external addon names
+function LibsTimePlayed:ShowDeleteConfirmDialog(char, externalSources)
+	-- Destroy previous dialog if it exists
+	if _G['LibsTPDeleteDialog'] then
+		_G['LibsTPDeleteDialog']:Hide()
+		_G['LibsTPDeleteDialog']:SetParent(nil)
+		_G['LibsTPDeleteDialog'] = nil
+	end
+
+	local dialogWidth = 360
+	local dialogHeight = 180
+
+	-- Create dialog frame
+	local dialog = CreateFrame('Frame', 'LibsTPDeleteDialog', UIParent, 'BackdropTemplate')
+	dialog:SetSize(dialogWidth, dialogHeight)
+	dialog:SetPoint('CENTER', UIParent, 'CENTER', 0, 100)
+	dialog:SetFrameStrata('DIALOG')
+	dialog:SetBackdrop({
+		bgFile = 'Interface\\Tooltips\\UI-Tooltip-Background',
+		edgeFile = 'Interface\\Tooltips\\UI-Tooltip-Border',
+		tile = true,
+		tileSize = 16,
+		edgeSize = 16,
+		insets = { left = 4, right = 4, top = 4, bottom = 4 },
+	})
+	dialog:SetBackdropColor(0.08, 0.08, 0.08, 0.95)
+	dialog:SetBackdropBorderColor(0.6, 0.6, 0.6, 1)
+	dialog:EnableMouse(true)
+	dialog:SetMovable(true)
+	dialog:RegisterForDrag('LeftButton')
+	dialog:SetScript('OnDragStart', dialog.StartMoving)
+	dialog:SetScript('OnDragStop', dialog.StopMovingOrSizing)
+
+	-- Title bar
+	local title = dialog:CreateFontString(nil, 'OVERLAY', 'GameFontNormal')
+	title:SetPoint('TOP', dialog, 'TOP', 0, -12)
+	title:SetText("|cffffffffLib's|r |cffe21f1fTimePlayed|r")
+
+	-- Message text
+	local sourceList = table.concat(externalSources, ', ')
+	local message = char.name .. ' - ' .. char.realm .. '\n\nAlso found in: ' .. sourceList .. '\n\nDelete from these as well?'
+
+	local text = dialog:CreateFontString(nil, 'OVERLAY', 'GameFontHighlight')
+	text:SetPoint('TOP', title, 'BOTTOM', 0, -10)
+	text:SetPoint('LEFT', dialog, 'LEFT', 20, 0)
+	text:SetPoint('RIGHT', dialog, 'RIGHT', -20, 0)
+	text:SetJustifyH('CENTER')
+	text:SetText(message)
+	text:SetWordWrap(true)
+
+	-- Measure text height and resize dialog if needed
+	local textHeight = text:GetStringHeight()
+	local minContentHeight = 12 + title:GetStringHeight() + 10 + textHeight + 15 + 26 + 14
+	if minContentHeight > dialogHeight then
+		dialog:SetHeight(minContentHeight)
+	end
+
+	-- Button definitions
+	local buttons = {
+		{
+			text = 'Delete All',
+			onClick = function()
+				-- Delete from our DB
+				self.globaldb.characters[char.key] = nil
+				-- Delete from external addons
+				for _, source in ipairs(externalSources) do
+					if source == 'AltVault' then
+						DeleteFromAltVault(char.name, char.realm)
+					elseif source == 'Altoholic' then
+						DeleteFromAltoholic(char.name, char.realm)
+					end
+				end
+				self:Print('Removed ' .. char.name .. ' - ' .. char.realm .. ' from TimePlayed and ' .. sourceList)
+				self:UpdatePopup()
+			end,
+		},
+		{
+			text = 'Only TimePlayed',
+			onClick = function()
+				self.globaldb.characters[char.key] = nil
+				self:Print('Removed ' .. char.name .. ' - ' .. char.realm)
+				self:UpdatePopup()
+			end,
+		},
+		{
+			text = 'Cancel',
+			onClick = function() end,
+		},
+	}
+
+	-- Create buttons
+	local buttonWidth = math.min(130, (dialogWidth - 20 - (#buttons - 1) * 6) / #buttons)
+	local totalButtonsWidth = (#buttons * buttonWidth) + ((#buttons - 1) * 6)
+	local startX = -totalButtonsWidth / 2
+
+	for i, btnDef in ipairs(buttons) do
+		local btn = LibAT.UI.CreateButton(dialog, buttonWidth, 26, btnDef.text, true)
+		btn:SetPoint('BOTTOM', dialog, 'BOTTOM', startX + (i - 1) * (buttonWidth + 6) + buttonWidth / 2, 14)
+		btn:SetScript('OnClick', function()
+			dialog:Hide()
+			btnDef.onClick()
+		end)
+	end
+
+	-- Allow Escape to close
+	tinsert(UISpecialFrames, 'LibsTPDeleteDialog')
+
+	dialog:Show()
 end
 
 ---Toggle popup visibility
