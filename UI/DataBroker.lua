@@ -14,11 +14,7 @@ function LibsTimePlayed:InitializeDataBroker()
 		label = 'TimePlayed',
 		OnClick = function(frame, button)
 			if button == 'LeftButton' then
-				if IsShiftKeyDown() then
-					LibsTimePlayed:TogglePopup()
-				else
-					LibsTimePlayed:CycleDisplayFormat()
-				end
+				LibsTimePlayed:TogglePopup()
 			elseif button == 'RightButton' then
 				LibsTimePlayed:OpenOptions()
 			elseif button == 'MiddleButton' then
@@ -74,21 +70,3 @@ function LibsTimePlayed:UpdateDisplay()
 	dataObj.text = text
 end
 
-function LibsTimePlayed:CycleDisplayFormat()
-	local formats = { 'total', 'session', 'level' }
-	local current = self.db.display.format
-	local currentIndex = 1
-
-	for i, fmt in ipairs(formats) do
-		if fmt == current then
-			currentIndex = i
-			break
-		end
-	end
-
-	local nextIndex = currentIndex < #formats and currentIndex + 1 or 1
-	self.db.display.format = formats[nextIndex]
-
-	self:Print('Display: ' .. formats[nextIndex])
-	self:UpdateDisplay()
-end

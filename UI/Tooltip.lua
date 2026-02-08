@@ -153,9 +153,7 @@ function LibsTimePlayed:BuildTooltip(anchorFrame)
 	-- Click hints
 	tooltip:AddSeparator()
 	row = tooltip:AddRow()
-	row:GetCell(1):SetText('Left Click: Cycle Format'):SetTextColor(1, 1, 0):SetColSpan(3)
-	row = tooltip:AddRow()
-	row:GetCell(1):SetText('Shift+Left: Toggle Window  |  Right: Options'):SetTextColor(1, 1, 0):SetColSpan(3)
+	row:GetCell(1):SetText('Left Click: Toggle Window  |  Right: Options'):SetTextColor(1, 1, 0):SetColSpan(3)
 	row = tooltip:AddRow()
 	row:GetCell(1):SetText('Middle Click: Refresh /played'):SetTextColor(1, 1, 0):SetColSpan(3)
 
