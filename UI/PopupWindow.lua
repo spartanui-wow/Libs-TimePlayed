@@ -189,6 +189,31 @@ function LibsTimePlayed:CreatePopup()
 	local closeBtn = CreateFrame('Button', nil, frame, 'UIPanelCloseButton')
 	closeBtn:SetPoint('TOPRIGHT', frame, 'TOPRIGHT', -2, -2)
 
+	-- Settings button (gear icon, same atlas as LibAT logger)
+	local settingsBtn = CreateFrame('Button', nil, frame)
+	settingsBtn:SetSize(24, 24)
+	settingsBtn:SetPoint('RIGHT', closeBtn, 'LEFT', -2, 0)
+
+	local settingsIcon = settingsBtn:CreateTexture(nil, 'ARTWORK')
+	settingsIcon:SetAtlas('Warfronts-BaseMapIcons-Empty-Workshop')
+	settingsIcon:SetAllPoints()
+
+	local settingsHighlight = settingsBtn:CreateTexture(nil, 'HIGHLIGHT')
+	settingsHighlight:SetAtlas('Warfronts-BaseMapIcons-Alliance-Workshop')
+	settingsHighlight:SetAllPoints()
+
+	settingsBtn:SetScript('OnClick', function()
+		self:OpenOptions()
+	end)
+	settingsBtn:SetScript('OnEnter', function(btn)
+		GameTooltip:SetOwner(btn, 'ANCHOR_BOTTOM')
+		GameTooltip:AddLine('Options')
+		GameTooltip:Show()
+	end)
+	settingsBtn:SetScript('OnLeave', function()
+		GameTooltip:Hide()
+	end)
+
 	-- Grouping dropdown (LibAT or fallback)
 	if LibAT and LibAT.UI and LibAT.UI.CreateDropdown then
 		local groupDropdown = LibAT.UI.CreateDropdown(frame, 'Group: Class', 140, 22)
