@@ -5,6 +5,22 @@ local LibsTimePlayed = LibStub('AceAddon-3.0'):GetAddon('Libs-TimePlayed')
 local Import = {}
 LibsTimePlayed.Import = Import
 
+---Create a styled button, using LibAT.UI when available, falling back to UIPanelButtonTemplate
+---@param parent Frame
+---@param width number
+---@param height number
+---@param text string
+---@return Button
+local function CreateStyledButton(parent, width, height, text)
+	if LibAT and LibAT.UI and LibAT.UI.CreateButton then
+		return LibAT.UI.CreateButton(parent, width, height, text, true)
+	end
+	local btn = CreateFrame('Button', nil, parent, 'UIPanelButtonTemplate')
+	btn:SetSize(width, height)
+	btn:SetText(text)
+	return btn
+end
+
 -- Available import sources
 local IMPORT_SOURCES = {
 	AltVault = 'AltVaultDB',
@@ -528,7 +544,7 @@ local function ShowImportDialog(message, buttons)
 	local startX = -totalButtonsWidth / 2
 
 	for i, btnDef in ipairs(buttons) do
-		local btn = LibAT.UI.CreateButton(dialog, buttonWidth, 26, btnDef.text, true)
+		local btn = CreateStyledButton(dialog, buttonWidth, 26, btnDef.text)
 		btn:SetPoint('BOTTOM', dialog, 'BOTTOM', startX + (i - 1) * (buttonWidth + 6) + buttonWidth / 2, 14)
 		btn:SetScript('OnClick', function()
 			dialog:Hide()
