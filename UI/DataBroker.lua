@@ -27,6 +27,69 @@ function LibsTimePlayed:InitializeDataBroker()
 		OnLeave = function(frame)
 			-- Auto-hide handles cleanup via SetAutoHideDelay
 		end,
+		GetOptions = function()
+			return {
+				type = 'group',
+				name = 'TimePlayed Settings',
+				args = {
+					format = {
+						type = 'select',
+						name = 'Display Format',
+						desc = 'What time to show on the broker text',
+						order = 1,
+						values = {
+							total = 'Total Played',
+							session = 'Session Time',
+							level = 'Level Time',
+						},
+						get = function()
+							return LibsTimePlayed.db.display.format
+						end,
+						set = function(_, val)
+							LibsTimePlayed.db.display.format = val
+							LibsTimePlayed:UpdateDisplay()
+						end,
+					},
+					timeFormat = {
+						type = 'select',
+						name = 'Time Format',
+						desc = 'How to format time values',
+						order = 2,
+						values = {
+							smart = 'Smart (2d 5h)',
+							full = 'Full (2d 5h 30m)',
+							hours = 'Hours (53.5h)',
+						},
+						get = function()
+							return LibsTimePlayed.db.display.timeFormat
+						end,
+						set = function(_, val)
+							LibsTimePlayed.db.display.timeFormat = val
+							LibsTimePlayed:UpdateDisplay()
+						end,
+					},
+					groupBy = {
+						type = 'select',
+						name = 'Group By',
+						desc = 'How to group characters in tooltip',
+						order = 3,
+						values = {
+							class = 'Class',
+							realm = 'Realm',
+							faction = 'Faction',
+							none = 'All Characters',
+						},
+						get = function()
+							return LibsTimePlayed.db.display.groupBy
+						end,
+						set = function(_, val)
+							LibsTimePlayed.db.display.groupBy = val
+							LibsTimePlayed:UpdateDisplay()
+						end,
+					},
+				},
+			}
+		end,
 	})
 
 	self.dataObject = dataObj
