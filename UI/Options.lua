@@ -1,7 +1,11 @@
 ---@class LibsTimePlayed
 local LibsTimePlayed = LibStub('AceAddon-3.0'):GetAddon('Libs-TimePlayed')
 
-function LibsTimePlayed:InitializeOptions()
+---@class LibsTimePlayed.Options : AceModule, AceEvent-3.0, AceTimer-3.0
+local Options = LibsTimePlayed:NewModule('Options')
+LibsTimePlayed.Options = Options
+
+function Options:OnEnable()
 	local options = {
 		name = "Lib's TimePlayed",
 		type = 'group',
@@ -139,10 +143,10 @@ function LibsTimePlayed:InitializeOptions()
 							return values
 						end,
 						get = function()
-							return LibsTimePlayed.selectedImportSource
+							return Options.selectedImportSource
 						end,
 						set = function(_, val)
-							LibsTimePlayed.selectedImportSource = val
+							Options.selectedImportSource = val
 						end,
 					},
 					mergeStrategy = {
@@ -169,23 +173,23 @@ function LibsTimePlayed:InitializeOptions()
 						type = 'execute',
 						order = 4,
 						confirm = function()
-							if not LibsTimePlayed.selectedImportSource then
+							if not Options.selectedImportSource then
 								return false
 							end
 							local sources = LibsTimePlayed.Import:GetAvailableSources()
-							local source = sources[LibsTimePlayed.selectedImportSource]
+							local source = sources[Options.selectedImportSource]
 							if not source or not source.available then
 								return false
 							end
-							return 'Import ' .. source.characterCount .. ' character(s) from ' .. LibsTimePlayed.selectedImportSource .. '?'
+							return 'Import ' .. source.characterCount .. ' character(s) from ' .. Options.selectedImportSource .. '?'
 						end,
 						func = function()
-							if not LibsTimePlayed.selectedImportSource then
+							if not Options.selectedImportSource then
 								LibsTimePlayed:Print('Please select an import source first.')
 								return
 							end
 
-							local success, imported, skipped = LibsTimePlayed.Import:ImportFrom(LibsTimePlayed.selectedImportSource)
+							local success, imported, skipped = LibsTimePlayed.Import:ImportFrom(Options.selectedImportSource)
 							if success then
 								LibsTimePlayed:Print('Import complete: ' .. imported .. ' imported, ' .. skipped .. ' skipped')
 								LibsTimePlayed:UpdateDisplay()
@@ -243,7 +247,7 @@ function LibsTimePlayed:InitializeOptions()
 						confirm = true,
 						confirmText = 'Remove characters not updated in 90+ days?',
 						func = function()
-							LibsTimePlayed:PurgeOldCharacters(90)
+							Options:PurgeOldCharacters(90)
 						end,
 					},
 				},
@@ -265,16 +269,16 @@ function LibsTimePlayed:InitializeOptions()
 						order = 1,
 						width = 'full',
 						values = function()
-							return LibsTimePlayed:GetCharacterListForOptions()
+							return Options:GetCharacterListForOptions()
 						end,
 						get = function(_, key)
-							return LibsTimePlayed.selectedCharsForDeletion and LibsTimePlayed.selectedCharsForDeletion[key]
+							return Options.selectedCharsForDeletion and Options.selectedCharsForDeletion[key]
 						end,
 						set = function(_, key, val)
-							if not LibsTimePlayed.selectedCharsForDeletion then
-								LibsTimePlayed.selectedCharsForDeletion = {}
+							if not Options.selectedCharsForDeletion then
+								Options.selectedCharsForDeletion = {}
 							end
-							LibsTimePlayed.selectedCharsForDeletion[key] = val or nil
+							Options.selectedCharsForDeletion[key] = val or nil
 						end,
 					},
 					deleteSelected = {
@@ -284,8 +288,8 @@ function LibsTimePlayed:InitializeOptions()
 						order = 2,
 						confirm = function()
 							local count = 0
-							if LibsTimePlayed.selectedCharsForDeletion then
-								for _ in pairs(LibsTimePlayed.selectedCharsForDeletion) do
+							if Options.selectedCharsForDeletion then
+								for _ in pairs(Options.selectedCharsForDeletion) do
 									count = count + 1
 								end
 							end
@@ -295,7 +299,7 @@ function LibsTimePlayed:InitializeOptions()
 							return 'Remove ' .. count .. ' selected character(s)? This cannot be undone.'
 						end,
 						func = function()
-							LibsTimePlayed:DeleteSelectedCharacters()
+							Options:DeleteSelectedCharacters()
 						end,
 					},
 				},
@@ -344,42 +348,42 @@ function LibsTimePlayed:InitializeOptions()
 	LibStub('AceConfigDialog-3.0'):AddToBlizOptions('LibsTimePlayed', "Lib's TimePlayed")
 end
 
-function LibsTimePlayed:OpenOptions()
+function Options:OpenOptions()
 	LibStub('AceConfigDialog-3.0'):Open('LibsTimePlayed')
 end
 
 ---Remove characters not updated within the given number of days
 ---@param days number
-function LibsTimePlayed:PurgeOldCharacters(days)
+function Options:PurgeOldCharacters(days)
 	local cutoff = time() - (days * 86400)
 	local removed = 0
 
-	for charKey, data in pairs(self.globaldb.characters) do
+	for charKey, data in pairs(LibsTimePlayed.globaldb.characters) do
 		if type(data) == 'table' and (data.lastUpdated or 0) < cutoff then
-			self.globaldb.characters[charKey] = nil
+			LibsTimePlayed.globaldb.characters[charKey] = nil
 			removed = removed + 1
 		end
 	end
 
-	self:Print('Removed ' .. removed .. ' character(s) not updated in ' .. days .. '+ days')
+	LibsTimePlayed:Print('Removed ' .. removed .. ' character(s) not updated in ' .. days .. '+ days')
 end
 
 ---Build a sorted list of character keys for the options multiselect
 ---Excludes the currently logged-in character
 ---@return table<string, string> values keyed by charKey, value is display label
-function LibsTimePlayed:GetCharacterListForOptions()
+function Options:GetCharacterListForOptions()
 	local values = {}
 	local playerName = UnitName('player')
 	local playerRealm = GetNormalizedRealmName()
 	local currentKey = playerRealm and playerName and (playerRealm .. '-' .. playerName) or ''
 
-	for charKey, data in pairs(self.globaldb.characters) do
+	for charKey, data in pairs(LibsTimePlayed.globaldb.characters) do
 		if type(data) == 'table' and charKey ~= currentKey then
 			local label = (data.name or '?') .. ' - ' .. (data.realm or '?')
 			if data.class then
 				label = label .. ' (' .. data.class .. ' ' .. (data.level or '?') .. ')'
 			end
-			label = label .. '  ' .. self.FormatTime(data.totalPlayed or 0, 'smart')
+			label = label .. '  ' .. LibsTimePlayed.FormatTime(data.totalPlayed or 0, 'smart')
 			values[charKey] = label
 		end
 	end
@@ -388,19 +392,19 @@ function LibsTimePlayed:GetCharacterListForOptions()
 end
 
 ---Delete all characters marked in selectedCharsForDeletion
-function LibsTimePlayed:DeleteSelectedCharacters()
+function Options:DeleteSelectedCharacters()
 	if not self.selectedCharsForDeletion then
 		return
 	end
 
 	local removed = 0
 	for charKey in pairs(self.selectedCharsForDeletion) do
-		if self.globaldb.characters[charKey] then
-			self.globaldb.characters[charKey] = nil
+		if LibsTimePlayed.globaldb.characters[charKey] then
+			LibsTimePlayed.globaldb.characters[charKey] = nil
 			removed = removed + 1
 		end
 	end
 
 	self.selectedCharsForDeletion = nil
-	self:Print('Removed ' .. removed .. ' character(s)')
+	LibsTimePlayed:Print('Removed ' .. removed .. ' character(s)')
 end

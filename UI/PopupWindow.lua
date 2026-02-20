@@ -1,6 +1,10 @@
 ---@class LibsTimePlayed
 local LibsTimePlayed = LibStub('AceAddon-3.0'):GetAddon('Libs-TimePlayed')
 
+---@class LibsTimePlayed.PopupWindow : AceModule, AceEvent-3.0, AceTimer-3.0
+local PopupWindow = LibsTimePlayed:NewModule('PopupWindow')
+LibsTimePlayed.PopupWindow = PopupWindow
+
 local LibQTip = LibStub('LibQTip-2.0')
 
 local DEFAULT_FONT_SIZE = 10
@@ -90,7 +94,7 @@ local function DeleteFromAltVault(charName, charRealm)
 	if not _G.AltVaultDB or not _G.AltVaultDB.characters then
 		return
 	end
-	-- AltVaultDB.characters is a numeric array — use table.remove to keep indices valid
+	-- AltVaultDB.characters is a numeric array - use table.remove to keep indices valid
 	for i = #_G.AltVaultDB.characters, 1, -1 do
 		local entry = _G.AltVaultDB.characters[i]
 		if type(entry) == 'table' and entry.character and entry.character.name == charName and entry.character.realm == charRealm then
@@ -105,7 +109,7 @@ end
 ---@param charName string Character name
 ---@param charRealm string Realm name
 local function DeleteFromAltoholic(charName, charRealm)
-	-- Use DataStore's proper API if available — it cleans up all module tables
+	-- Use DataStore's proper API if available - it cleans up all module tables
 	if _G.DataStore and _G.DataStore.DeleteCharacter then
 		_G.DataStore:DeleteCharacter(charName, charRealm)
 		return
@@ -384,14 +388,14 @@ end
 
 ---Create the popup window frame using LibAT.UI
 ---@return Frame
-function LibsTimePlayed:CreatePopup()
+function PopupWindow:CreatePopup()
 	if popupFrame then
 		return popupFrame
 	end
 
 	-- Check if LibAT.UI is available
 	if not LibAT or not LibAT.UI or not LibAT.UI.CreateWindow then
-		self:Log('LibAT.UI not available, cannot create popup window', 'error')
+		LibsTimePlayed:Log('LibAT.UI not available, cannot create popup window', 'error')
 		return nil
 	end
 
@@ -399,8 +403,8 @@ function LibsTimePlayed:CreatePopup()
 	local window = LibAT.UI.CreateWindow({
 		name = 'LibsTimePlayedPopup',
 		title = 'Time Played',
-		width = self.db.popup.width or 700,
-		height = self.db.popup.height or 300,
+		width = LibsTimePlayed.db.popup.width or 700,
+		height = LibsTimePlayed.db.popup.height or 300,
 		hidePortrait = true,
 		resizable = true,
 		minWidth = 550,
@@ -423,7 +427,7 @@ function LibsTimePlayed:CreatePopup()
 	streakButton:SetPoint('RIGHT', settingsButton, 'LEFT', -5, -2)
 	streakButton:SetScript('OnClick', function()
 		LibsTimePlayed.db.display.showStreaks = not LibsTimePlayed.db.display.showStreaks
-		LibsTimePlayed:UpdatePopup()
+		PopupWindow:UpdatePopup()
 	end)
 	window.streakButton = streakButton
 
@@ -460,13 +464,13 @@ function LibsTimePlayed:CreatePopup()
 				return LibsTimePlayed.db.display.groupBy == item.key
 			end, function()
 				LibsTimePlayed.db.display.groupBy = item.key
-				LibsTimePlayed:UpdatePopup()
+				PopupWindow:UpdatePopup()
 			end)
 		end
 	end)
 
 	-- Set initial dropdown text based on current groupBy
-	local currentGroupBy = self.db.display.groupBy or 'class'
+	local currentGroupBy = LibsTimePlayed.db.display.groupBy or 'class'
 	groupDropdown:SetText('Group: ' .. GROUPBY_LABELS[currentGroupBy])
 
 	window.groupDropdown = groupDropdown
@@ -529,7 +533,7 @@ function LibsTimePlayed:CreatePopup()
 	window.streakScrollChild = streakScrollChild
 
 	-- Create streak pane content inside the scroll child
-	self:CreateStreakPane(streakScrollChild)
+	LibsTimePlayed:CreateStreakPane(streakScrollChild)
 
 	-- Total text (bottom)
 	local totalText = window:CreateFontString(nil, 'OVERLAY', 'GameFontHighlight')
@@ -549,11 +553,11 @@ function LibsTimePlayed:CreatePopup()
 	-- Store config on hide
 	window:SetScript('OnHide', function()
 		local point, _, _, x, y = window:GetPoint()
-		self.db.popup.point = point or 'CENTER'
-		self.db.popup.x = x or 0
-		self.db.popup.y = y or 0
-		self.db.popup.width = window:GetWidth()
-		self.db.popup.height = window:GetHeight()
+		LibsTimePlayed.db.popup.point = point or 'CENTER'
+		LibsTimePlayed.db.popup.x = x or 0
+		LibsTimePlayed.db.popup.y = y or 0
+		LibsTimePlayed.db.popup.width = window:GetWidth()
+		LibsTimePlayed.db.popup.height = window:GetHeight()
 	end)
 
 	-- Recalculate pane widths and row widths on resize
@@ -563,7 +567,7 @@ function LibsTimePlayed:CreatePopup()
 		end
 
 		-- Re-layout the content (UpdatePopup handles pane widths and row widths)
-		self:UpdatePopup()
+		PopupWindow:UpdatePopup()
 	end)
 
 	popupFrame = window
@@ -571,12 +575,12 @@ function LibsTimePlayed:CreatePopup()
 end
 
 ---Populate the popup with current data
-function LibsTimePlayed:UpdatePopup()
+function PopupWindow:UpdatePopup()
 	if not popupFrame then
 		return
 	end
 
-	local groupBy = self.db.display.groupBy or 'class'
+	local groupBy = LibsTimePlayed.db.display.groupBy or 'class'
 
 	-- Update dropdown text
 	if popupFrame.groupDropdown then
@@ -584,7 +588,7 @@ function LibsTimePlayed:UpdatePopup()
 	end
 
 	-- Manage pane layout based on showStreaks setting
-	local showStreaks = self.db.display.showStreaks
+	local showStreaks = LibsTimePlayed.db.display.showStreaks
 
 	if showStreaks then
 		popupFrame.rightPane:Show()
@@ -635,7 +639,7 @@ function LibsTimePlayed:UpdatePopup()
 		accountTotal = 0
 
 		local allChars = {}
-		for charKey, data in pairs(self.globaldb.characters) do
+		for charKey, data in pairs(LibsTimePlayed.globaldb.characters) do
 			if type(data) == 'table' and data.totalPlayed and data.classFile then
 				local char = {
 					key = charKey,
@@ -668,7 +672,7 @@ function LibsTimePlayed:UpdatePopup()
 			total = accountTotal,
 		})
 	else
-		sortedGroups, accountTotal = self:GetGroupedData(groupBy)
+		sortedGroups, accountTotal = LibsTimePlayed:GetGroupedData(groupBy)
 	end
 
 	-- Find top group total for bar scaling
@@ -700,10 +704,10 @@ function LibsTimePlayed:UpdatePopup()
 		-- Click handler for expand/collapse + right-click delete for single-char groups
 		row:SetScript('OnMouseDown', function(_, button)
 			if button == 'RightButton' and #group.chars == 1 then
-				self:ShowCharacterContextMenu(row, group.chars[1])
+				PopupWindow:ShowCharacterContextMenu(row, group.chars[1])
 			elseif button == 'LeftButton' and hasChars then
 				expandedGroups[group.key] = not expandedGroups[group.key]
-				self:UpdatePopup()
+				PopupWindow:UpdatePopup()
 			end
 		end)
 
@@ -735,7 +739,7 @@ function LibsTimePlayed:UpdatePopup()
 				-- Right-click to delete character
 				charRow:SetScript('OnMouseDown', function(_, button)
 					if button == 'RightButton' then
-						self:ShowCharacterContextMenu(charRow, char)
+						PopupWindow:ShowCharacterContextMenu(charRow, char)
 					end
 				end)
 				charRow:SetScript('OnEnter', nil)
@@ -755,11 +759,11 @@ function LibsTimePlayed:UpdatePopup()
 	popupFrame.scrollChild:SetHeight(yOffset)
 
 	-- Total
-	popupFrame.totalText:SetText('Account Total: ' .. self.FormatTime(accountTotal, 'full'))
+	popupFrame.totalText:SetText('Account Total: ' .. LibsTimePlayed.FormatTime(accountTotal, 'full'))
 
 	-- Milestones
-	if self.GetMilestones and self.db.display.showMilestones then
-		local milestones = self:GetMilestones(sortedGroups, accountTotal)
+	if LibsTimePlayed.GetMilestones and LibsTimePlayed.db.display.showMilestones then
+		local milestones = LibsTimePlayed:GetMilestones(sortedGroups, accountTotal)
 		popupFrame.milestoneText:SetText(table.concat(milestones, '  |  '))
 		popupFrame.milestoneText:Show()
 	else
@@ -767,13 +771,13 @@ function LibsTimePlayed:UpdatePopup()
 	end
 
 	-- Update streak pane
-	if showStreaks and self.UpdateStreakPane then
-		self:UpdateStreakPane()
+	if showStreaks and LibsTimePlayed.UpdateStreakPane then
+		LibsTimePlayed:UpdateStreakPane()
 	end
 end
 
 ---Apply font size to all existing popup rows and refresh
-function LibsTimePlayed:ApplyFontSize()
+function PopupWindow:ApplyFontSize()
 	if not popupFrame then
 		return
 	end
@@ -796,7 +800,7 @@ end
 ---Show a right-click context menu for a character using LibQTip-2.0
 ---@param anchor Frame The frame to anchor the menu to
 ---@param char table Character data with key, name, realm fields
-function LibsTimePlayed:ShowCharacterContextMenu(anchor, char)
+function PopupWindow:ShowCharacterContextMenu(anchor, char)
 	-- Don't allow deleting current character
 	local currentKey = GetNormalizedRealmName() .. '-' .. UnitName('player')
 	if char.key == currentKey then
@@ -834,25 +838,24 @@ end
 
 ---Handle character deletion, checking for external addon data
 ---@param char table Character data with key, name, realm fields
-function LibsTimePlayed:HandleDeleteCharacter(char)
+function PopupWindow:HandleDeleteCharacter(char)
 	local externalSources = GetExternalSourcesForChar(char.name, char.realm)
 
 	if #externalSources == 0 then
-		-- No external addons — delete immediately, no confirmation
-		self.globaldb.characters[char.key] = nil
-		self:Print('Removed ' .. char.name .. ' - ' .. char.realm)
+		-- No external addons - delete immediately, no confirmation
+		LibsTimePlayed.globaldb.characters[char.key] = nil
+		LibsTimePlayed:Print('Removed ' .. char.name .. ' - ' .. char.realm)
 		self:UpdatePopup()
 	else
-		-- External addons found — show confirmation dialog
+		-- External addons found - show confirmation dialog
 		self:ShowDeleteConfirmDialog(char, externalSources)
 	end
 end
 
 ---Show a confirmation dialog when external addons have the character
----Uses the same visual style as the import dialog in Import.lua
 ---@param char table Character data with key, name, realm fields
 ---@param externalSources string[] List of external addon names
-function LibsTimePlayed:ShowDeleteConfirmDialog(char, externalSources)
+function PopupWindow:ShowDeleteConfirmDialog(char, externalSources)
 	-- Destroy previous dialog if it exists
 	if _G['LibsTPDeleteDialog'] then
 		_G['LibsTPDeleteDialog']:Hide()
@@ -914,7 +917,7 @@ function LibsTimePlayed:ShowDeleteConfirmDialog(char, externalSources)
 			text = 'Delete All',
 			onClick = function()
 				-- Delete from our DB
-				self.globaldb.characters[char.key] = nil
+				LibsTimePlayed.globaldb.characters[char.key] = nil
 				-- Delete from external addons
 				for _, source in ipairs(externalSources) do
 					if source == 'AltVault' then
@@ -923,16 +926,16 @@ function LibsTimePlayed:ShowDeleteConfirmDialog(char, externalSources)
 						DeleteFromAltoholic(char.name, char.realm)
 					end
 				end
-				self:Print('Removed ' .. char.name .. ' - ' .. char.realm .. ' from TimePlayed and ' .. sourceList)
-				self:UpdatePopup()
+				LibsTimePlayed:Print('Removed ' .. char.name .. ' - ' .. char.realm .. ' from TimePlayed and ' .. sourceList)
+				PopupWindow:UpdatePopup()
 			end,
 		},
 		{
 			text = 'Only TimePlayed',
 			onClick = function()
-				self.globaldb.characters[char.key] = nil
-				self:Print('Removed ' .. char.name .. ' - ' .. char.realm)
-				self:UpdatePopup()
+				LibsTimePlayed.globaldb.characters[char.key] = nil
+				LibsTimePlayed:Print('Removed ' .. char.name .. ' - ' .. char.realm)
+				PopupWindow:UpdatePopup()
 			end,
 		},
 		{
@@ -962,10 +965,10 @@ function LibsTimePlayed:ShowDeleteConfirmDialog(char, externalSources)
 end
 
 ---Toggle popup visibility
-function LibsTimePlayed:TogglePopup()
+function PopupWindow:TogglePopup()
 	local frame = self:CreatePopup()
 	if not frame then
-		self:Print('The popup window requires the Libs-AddonTools addon. Install it from CurseForge.')
+		LibsTimePlayed:Print('The popup window requires the Libs-AddonTools addon. Install it from CurseForge.')
 		return
 	end
 
@@ -974,5 +977,22 @@ function LibsTimePlayed:TogglePopup()
 	else
 		self:UpdatePopup()
 		frame:Show()
+	end
+end
+
+-- Bridge methods on main addon for backward compatibility
+function LibsTimePlayed:TogglePopup()
+	self.PopupWindow:TogglePopup()
+end
+
+function LibsTimePlayed:UpdatePopup()
+	if self.PopupWindow then
+		self.PopupWindow:UpdatePopup()
+	end
+end
+
+function LibsTimePlayed:ApplyFontSize()
+	if self.PopupWindow then
+		self.PopupWindow:ApplyFontSize()
 	end
 end

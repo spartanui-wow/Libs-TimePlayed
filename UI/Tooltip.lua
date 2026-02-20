@@ -13,7 +13,9 @@ local GROUPBY_LABELS = {
 ---@return LibQTip-2.0.Tooltip tooltip
 function LibsTimePlayed:BuildTooltip(anchorFrame)
 	local tooltip = LibQTip:AcquireTooltip('LibsTimePlayedTooltip', 3, 'LEFT', 'RIGHT', 'RIGHT')
-	self.activeTooltip = tooltip
+	if self.DataBroker then
+		self.DataBroker.activeTooltip = tooltip
+	end
 	tooltip:Clear()
 
 	-- Title

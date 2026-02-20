@@ -1,6 +1,10 @@
 ---@class LibsTimePlayed
 local LibsTimePlayed = LibStub('AceAddon-3.0'):GetAddon('Libs-TimePlayed')
 
+---@class LibsTimePlayed.Database : AceModule
+local Database = LibsTimePlayed:NewModule('Database')
+LibsTimePlayed.Database = Database
+
 local defaults = {
 	global = {
 		characters = {
@@ -42,8 +46,8 @@ local defaults = {
 	},
 }
 
-function LibsTimePlayed:InitializeDatabase()
-	self.dbobj = LibStub('AceDB-3.0'):New('LibsTimePlayedDB', defaults, true)
-	self.db = self.dbobj.profile
-	self.globaldb = self.dbobj.global
+function Database:OnInitialize()
+	LibsTimePlayed.dbobj = LibStub('AceDB-3.0'):New('LibsTimePlayedDB', defaults, true)
+	LibsTimePlayed.db = LibsTimePlayed.dbobj.profile
+	LibsTimePlayed.globaldb = LibsTimePlayed.dbobj.global
 end

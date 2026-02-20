@@ -1,8 +1,8 @@
 ---@class LibsTimePlayed
 local LibsTimePlayed = LibStub('AceAddon-3.0'):GetAddon('Libs-TimePlayed')
 
----@class LibsTimePlayed.Import
-local Import = {}
+---@class LibsTimePlayed.Import : AceModule
+local Import = LibsTimePlayed:NewModule('Import')
 LibsTimePlayed.Import = Import
 
 ---Create a styled button, using LibAT.UI when available, falling back to UIPanelButtonTemplate
@@ -133,29 +133,20 @@ function Import:ParseAltVault()
 		if type(entry) == 'table' and entry.character then
 			local char = entry.character
 
-			-- Extract required fields
 			if char.played and char.name and char.realm then
 				local normalizedChar = {
 					source = 'AltVault',
 					importedAt = time(),
-
-					-- Identity
 					name = char.name,
 					realm = char.realm,
 					guid = entry.GUID,
-
-					-- Time-played data
 					totalPlayed = char.played or 0,
 					levelPlayed = char.playedAtLevel or 0,
 					lastLogin = ConvertAltVaultTimestamp(char.lastPlayed),
-
-					-- Character metadata
 					level = char.level or 1,
 					class = char.classKey or char.class or 'WARRIOR',
 					race = char.raceKey or char.race or 'Unknown',
 					faction = char.faction or 'Neutral',
-
-					-- Optional context
 					xp = char.xp,
 					xpMax = char.xpMax,
 					restedXP = char.restedXP,
@@ -183,7 +174,6 @@ function Import:ParseAltoholic()
 		return {}
 	end
 
-	-- Check for bit64 library (needed for BaseInfo decoding)
 	local bit64
 	if LibStub then
 		bit64 = LibStub('DataStore_bit64', true)
@@ -194,17 +184,14 @@ function Import:ParseAltoholic()
 		return {}
 	end
 
-	-- GUID lookup table
 	local guids = _G.DataStore_CharacterGUIDs or {}
 
 	for charKey, data in pairs(db.global.Characters) do
 		if type(data) == 'table' and data.played then
-			-- Parse charKey: "Default.RealmName.CharName"
 			local parts = { strsplit('.', charKey) }
 			local realm = parts[2] or 'Unknown'
 			local name = parts[3] or 'Unknown'
 
-			-- Decode BaseInfo
 			local level = 1
 			local classID = 1
 			local raceID = 1
@@ -215,19 +202,15 @@ function Import:ParseAltoholic()
 				raceID = bit64:GetBits(data.BaseInfo, 11, 7) or 1
 			end
 
-			-- Convert class/race IDs to names
 			local classInfo = C_CreatureInfo.GetClassInfo(classID)
 			local raceInfo = C_CreatureInfo.GetRaceInfo(raceID)
 
 			local className = classInfo and classInfo.classFile or 'WARRIOR'
 			local raceName = raceInfo and raceInfo.clientFileString or 'Unknown'
 
-			-- Determine faction from race
 			local faction = 'Neutral'
 			if raceInfo then
 				if raceInfo.raceID then
-					-- Horde races: 2=Orc, 5=Undead, 6=Tauren, 8=Troll, 9=Goblin, 10=BloodElf, 27=Nightborne, 28=HighmountainTauren, 31=ZandalariTroll, 32=KulTiran, 34=DarkIronDwarf, 35=Vulpera, 36=MagharOrc, 70=Dracthyr(Horde)
-					-- Alliance races: 1=Human, 3=Dwarf, 4=NightElf, 7=Gnome, 11=Draenei, 22=Worgen, 24=PandarenAlliance, 29=VoidElf, 30=LightforgedDraenei, 32=KulTiran, 34=DarkIronDwarf, 37=Mechagnome, 52=Dracthyr(Alliance)
 					local hordeRaces = { [2] = true, [5] = true, [6] = true, [8] = true, [9] = true, [10] = true, [27] = true, [28] = true, [31] = true, [35] = true, [36] = true }
 					local allianceRaces = { [1] = true, [3] = true, [4] = true, [7] = true, [11] = true, [22] = true, [29] = true, [30] = true, [37] = true, [52] = true }
 
@@ -242,24 +225,16 @@ function Import:ParseAltoholic()
 			local normalizedChar = {
 				source = 'Altoholic',
 				importedAt = time(),
-
-				-- Identity
 				name = name,
 				realm = realm,
 				guid = guids[charKey],
-
-				-- Time-played data
 				totalPlayed = data.played or 0,
 				levelPlayed = data.playedThisLevel or 0,
 				lastLogin = data.lastLogoutTimestamp or data.lastUpdate or 0,
-
-				-- Character metadata
 				level = level,
 				class = className,
 				race = raceName,
 				faction = faction,
-
-				-- Optional context
 				xp = data.XP,
 				xpMax = data.maxXP,
 				restedXP = data.restXP,
@@ -277,7 +252,6 @@ end
 ---@return boolean valid
 ---@return string? error Error message if invalid
 local function ValidateCharacterData(char)
-	-- Required fields
 	if not char.name or char.name == '' then
 		return false, 'Missing character name'
 	end
@@ -288,7 +262,6 @@ local function ValidateCharacterData(char)
 		return false, 'Missing or invalid totalPlayed'
 	end
 
-	-- Validate time values
 	if char.totalPlayed < 0 then
 		return false, 'Negative totalPlayed value'
 	end
@@ -296,14 +269,12 @@ local function ValidateCharacterData(char)
 		return false, 'Negative levelPlayed value'
 	end
 
-	-- Validate timestamp (not in future, not before WoW launch ~2004)
 	local wowLaunchDate = 1101283200 -- Nov 23, 2004
 	local now = time()
 	if char.lastLogin and (char.lastLogin > now or char.lastLogin < wowLaunchDate) then
 		return false, 'Invalid timestamp'
 	end
 
-	-- Validate level (1-80 for retail)
 	if char.level and (char.level < 1 or char.level > 80) then
 		return false, 'Invalid level: ' .. char.level
 	end
@@ -335,36 +306,28 @@ function Import:MergeCharacterData(importedChars)
 	local db = LibsTimePlayed.globaldb.characters
 
 	for _, char in ipairs(importedChars) do
-		-- Validate data
 		local valid, error = ValidateCharacterData(char)
 		if not valid then
 			LibsTimePlayed:Log('Skipped invalid character ' .. (char.name or '?') .. ': ' .. (error or 'unknown error'), 'warning')
 			skipped = skipped + 1
 		else
-			-- Build character key
 			local charKey = char.realm .. '-' .. char.name
-
-			-- Check if character already exists
 			local existing = db[charKey]
 
 			local shouldImport = false
 
 			if not existing then
-				-- New character, always import
 				shouldImport = true
 			else
-				-- Handle conflict based on merge strategy
 				if currentMergeStrategy == MERGE_STRATEGIES.PREFER_IMPORTED then
 					shouldImport = true
 				elseif currentMergeStrategy == MERGE_STRATEGIES.PREFER_EXISTING then
 					shouldImport = false
 				elseif currentMergeStrategy == MERGE_STRATEGIES.NEWEST_WINS then
-					-- Compare timestamps
 					local existingTime = existing.lastUpdated or 0
 					local importedTime = char.lastLogin or 0
 					shouldImport = importedTime > existingTime
 				elseif currentMergeStrategy == MERGE_STRATEGIES.MAX_VALUES then
-					-- Use maximum of both values
 					shouldImport = true
 					char.totalPlayed = math.max(char.totalPlayed, existing.totalPlayed or 0)
 					char.levelPlayed = math.max(char.levelPlayed, existing.levelPlayed or 0)
@@ -372,12 +335,11 @@ function Import:MergeCharacterData(importedChars)
 			end
 
 			if shouldImport then
-				-- Convert to internal format
 				db[charKey] = {
 					name = char.name,
 					realm = char.realm,
-					class = char.class, -- Might be localized from AltVault
-					classFile = char.class, -- Altoholic already provides classFile
+					class = char.class,
+					classFile = char.class,
 					faction = char.faction,
 					level = char.level,
 					totalPlayed = char.totalPlayed,
@@ -424,10 +386,8 @@ function Import:ImportFrom(sourceName)
 
 	LibsTimePlayed:Log('Found ' .. #characters .. ' character(s) in ' .. sourceName .. ' database', 'info')
 
-	-- Merge into database
 	local imported, skipped = self:MergeCharacterData(characters)
 
-	-- Track import in history
 	if not LibsTimePlayed.globaldb.importHistory then
 		LibsTimePlayed.globaldb.importHistory = {}
 	end
@@ -454,7 +414,6 @@ end
 ---Check if this is a first-time user (no characters tracked and hasn't been offered import)
 ---@return boolean isFirstTime
 function Import:IsFirstTimeUser()
-	-- Count existing characters (excluding current character)
 	local currentCharKey = GetNormalizedRealmName() .. '-' .. UnitName('player')
 	local charCount = 0
 	for key in pairs(LibsTimePlayed.globaldb.characters) do
@@ -463,8 +422,6 @@ function Import:IsFirstTimeUser()
 		end
 	end
 
-	-- First time if: no OTHER characters AND hasn't been offered import yet
-	-- This allows the current character to be added without interfering with import detection
 	return charCount == 0 and not LibsTimePlayed.globaldb.firstTimeImportOffered
 end
 
@@ -482,11 +439,10 @@ local function DoImport(sourceName)
 	end
 end
 
----Create the import dialog frame using LibAT.UI
+---Create the import dialog frame
 ---@param message string Dialog message text
 ---@param buttons table[] Array of {text, onClick} button definitions
 local function ShowImportDialog(message, buttons)
-	-- Destroy previous dialog if it exists
 	if _G['LibsTPImportDialog'] then
 		_G['LibsTPImportDialog']:Hide()
 		_G['LibsTPImportDialog']:SetParent(nil)
@@ -496,7 +452,6 @@ local function ShowImportDialog(message, buttons)
 	local dialogWidth = 360
 	local dialogHeight = 180
 
-	-- Create dialog frame
 	local dialog = CreateFrame('Frame', 'LibsTPImportDialog', UIParent, 'BackdropTemplate')
 	dialog:SetSize(dialogWidth, dialogHeight)
 	dialog:SetPoint('CENTER', UIParent, 'CENTER', 0, 100)
@@ -517,12 +472,10 @@ local function ShowImportDialog(message, buttons)
 	dialog:SetScript('OnDragStart', dialog.StartMoving)
 	dialog:SetScript('OnDragStop', dialog.StopMovingOrSizing)
 
-	-- Title bar
 	local title = dialog:CreateFontString(nil, 'OVERLAY', 'GameFontNormal')
 	title:SetPoint('TOP', dialog, 'TOP', 0, -12)
 	title:SetText("|cffffffffLib's|r |cffe21f1fTimePlayed|r")
 
-	-- Message text
 	local text = dialog:CreateFontString(nil, 'OVERLAY', 'GameFontHighlight')
 	text:SetPoint('TOP', title, 'BOTTOM', 0, -10)
 	text:SetPoint('LEFT', dialog, 'LEFT', 20, 0)
@@ -531,14 +484,12 @@ local function ShowImportDialog(message, buttons)
 	text:SetText(message)
 	text:SetWordWrap(true)
 
-	-- Measure text height and resize dialog if needed
 	local textHeight = text:GetStringHeight()
 	local minContentHeight = 12 + title:GetStringHeight() + 10 + textHeight + 15 + 26 + 14
 	if minContentHeight > dialogHeight then
 		dialog:SetHeight(minContentHeight)
 	end
 
-	-- Create buttons from right to left
 	local buttonWidth = math.min(130, (dialogWidth - 20 - (#buttons - 1) * 6) / #buttons)
 	local totalButtonsWidth = (#buttons * buttonWidth) + ((#buttons - 1) * 6)
 	local startX = -totalButtonsWidth / 2
@@ -552,19 +503,15 @@ local function ShowImportDialog(message, buttons)
 		end)
 	end
 
-	-- Allow Escape to close
 	tinsert(UISpecialFrames, 'LibsTPImportDialog')
 
 	dialog:Show()
 end
 
 ---Offer first-time import to the user
----Automatically detects available sources and prompts user to import
 function Import:OfferFirstTimeImport()
-	-- Mark that we've offered (do this first to prevent repeated prompts)
 	LibsTimePlayed.globaldb.firstTimeImportOffered = true
 
-	-- Check for available sources
 	local sources = self:GetAvailableSources()
 	local availableSources = {}
 
@@ -574,15 +521,12 @@ function Import:OfferFirstTimeImport()
 		end
 	end
 
-	-- No sources available
 	if #availableSources == 0 then
 		LibsTimePlayed:Log('First-time user detected, but no import sources available', 'debug')
 		return
 	end
 
-	-- Sort sources: prefer AltVault (cleaner data format), then by character count
 	table.sort(availableSources, function(a, b)
-		-- If one is AltVault and counts are close (within 10%), prefer AltVault
 		if a.name == 'AltVault' and b.name ~= 'AltVault' then
 			local ratio = a.count / b.count
 			if ratio >= 0.9 then
@@ -601,14 +545,12 @@ function Import:OfferFirstTimeImport()
 	local hasMultipleSources = #availableSources > 1
 
 	if hasMultipleSources then
-		-- Build multi-source message
 		local message = 'Detected multiple data sources:\n\n'
 		for i, src in ipairs(availableSources) do
 			local recommended = (i == 1) and ' (Recommended)' or ''
 			message = message .. string.format('  %s: %d character(s)%s\n', src.name, src.count, recommended)
 		end
 
-		-- Show dialog with a button per source + No Thanks
 		ShowImportDialog(message, {
 			{
 				text = topSource.name,
@@ -631,7 +573,6 @@ function Import:OfferFirstTimeImport()
 			},
 		})
 	else
-		-- Single source
 		local message = string.format('Detected %s with %d character(s).\n\nImport this data to populate your time-played history?', topSource.name, topSource.count)
 
 		ShowImportDialog(message, {

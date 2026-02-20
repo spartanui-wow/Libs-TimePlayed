@@ -1,10 +1,9 @@
 ---@class LibsTimePlayed
 local LibsTimePlayed = LibStub('AceAddon-3.0'):GetAddon('Libs-TimePlayed')
 
-----------------------------------------------------------------------------------------------------
--- Play Streak Tracker
--- Tracks daily login streaks, session counts, and builds a 14-day visual timeline
-----------------------------------------------------------------------------------------------------
+---@class LibsTimePlayed.StreakTracker : AceModule, AceTimer-3.0
+local StreakTracker = LibsTimePlayed:NewModule('StreakTracker', 'AceTimer-3.0')
+LibsTimePlayed.StreakTracker = StreakTracker
 
 ---Get today's date key in YYYY-MM-DD format
 ---@return string dateKey
@@ -19,13 +18,8 @@ local function GetDateKey(daysAgo)
 	return date('%Y-%m-%d', time() - (daysAgo * 86400))
 end
 
-----------------------------------------------------------------------------------------------------
--- Initialization
-----------------------------------------------------------------------------------------------------
-
----Initialize the streak tracking system
-function LibsTimePlayed:InitializeStreakTracker()
-	local streaks = self.globaldb.streaks
+function StreakTracker:OnEnable()
+	local streaks = LibsTimePlayed.globaldb.streaks
 	if not streaks then
 		return
 	end
@@ -41,16 +35,16 @@ function LibsTimePlayed:InitializeStreakTracker()
 	self.streakSessionStart = time()
 	self:ScheduleRepeatingTimer('UpdateStreakSessionTime', 300)
 
-	self:Log('Streak tracker initialized: ' .. (streaks.currentStreak or 0) .. ' day streak', 'debug')
+	LibsTimePlayed:Log('Streak tracker initialized: ' .. (streaks.currentStreak or 0) .. ' day streak', 'debug')
 end
 
-----------------------------------------------------------------------------------------------------
--- Daily Tracking
-----------------------------------------------------------------------------------------------------
+function StreakTracker:OnDisable()
+	self:CancelAllTimers()
+end
 
 ---Mark today as a played day and initialize the daily log entry
-function LibsTimePlayed:MarkTodayPlayed()
-	local streaks = self.globaldb.streaks
+function StreakTracker:MarkTodayPlayed()
+	local streaks = LibsTimePlayed.globaldb.streaks
 	if not streaks then
 		return
 	end
@@ -67,33 +61,26 @@ function LibsTimePlayed:MarkTodayPlayed()
 end
 
 ---Update the session time for today (called every 5 minutes by timer)
-function LibsTimePlayed:UpdateStreakSessionTime()
-	local streaks = self.globaldb.streaks
+function StreakTracker:UpdateStreakSessionTime()
+	local streaks = LibsTimePlayed.globaldb.streaks
 	if not streaks then
 		return
 	end
 
 	local today = GetTodayKey()
 	if not streaks.dailyLog[today] then
-		-- Day changed while playing — mark the new day
 		self:MarkTodayPlayed()
 		self:RecalculateStreaks()
-		-- Reset session start for the new day
 		self.streakSessionStart = time()
 	end
 
-	-- Add 5 minutes (300 seconds) to today's total
 	streaks.dailyLog[today].totalSeconds = (streaks.dailyLog[today].totalSeconds or 0) + 300
 end
 
-----------------------------------------------------------------------------------------------------
--- Streak Calculation
-----------------------------------------------------------------------------------------------------
-
 ---Recalculate current and longest streaks from the daily log
 ---Also prunes entries older than 30 days
-function LibsTimePlayed:RecalculateStreaks()
-	local streaks = self.globaldb.streaks
+function StreakTracker:RecalculateStreaks()
+	local streaks = LibsTimePlayed.globaldb.streaks
 	if not streaks then
 		return
 	end
@@ -110,10 +97,8 @@ function LibsTimePlayed:RecalculateStreaks()
 	local currentStreak = 0
 	local today = GetTodayKey()
 
-	-- Check if today is played
 	if streaks.dailyLog[today] then
 		currentStreak = 1
-		-- Walk backward from yesterday
 		for i = 1, 30 do
 			local dayKey = GetDateKey(i)
 			if streaks.dailyLog[dayKey] then
@@ -123,8 +108,6 @@ function LibsTimePlayed:RecalculateStreaks()
 			end
 		end
 	else
-		-- Today not yet counted (edge case: just logged in, timer hasn't fired)
-		-- Check starting from yesterday
 		for i = 1, 30 do
 			local dayKey = GetDateKey(i)
 			if streaks.dailyLog[dayKey] then
@@ -142,7 +125,6 @@ function LibsTimePlayed:RecalculateStreaks()
 	local longestStart = ''
 	local longestEnd = ''
 
-	-- Scan the last 30 days for the longest consecutive run
 	local runLength = 0
 	local runStart = ''
 	for i = 30, 0, -1 do
@@ -161,16 +143,14 @@ function LibsTimePlayed:RecalculateStreaks()
 			runLength = 0
 		end
 	end
-	-- Check final run
 	if runLength > longestStreak then
 		longestStreak = runLength
 		longestStart = runStart
 		longestEnd = GetTodayKey()
 	end
 
-	-- Keep existing longest if it's greater (from before the 30d window)
 	if (streaks.longestStreak or 0) > longestStreak then
-		-- Don't overwrite — historical longest is preserved
+		-- Don't overwrite - historical longest is preserved
 	else
 		streaks.longestStreak = longestStreak
 		if longestStart ~= '' then
@@ -180,14 +160,10 @@ function LibsTimePlayed:RecalculateStreaks()
 	end
 end
 
-----------------------------------------------------------------------------------------------------
--- Data Accessors
-----------------------------------------------------------------------------------------------------
-
 ---Get average session duration in minutes
 ---@return number averageMinutes
-function LibsTimePlayed:GetAverageSessionMinutes()
-	local streaks = self.globaldb.streaks
+function StreakTracker:GetAverageSessionMinutes()
+	local streaks = LibsTimePlayed.globaldb.streaks
 	if not streaks then
 		return 0
 	end
@@ -207,22 +183,20 @@ function LibsTimePlayed:GetAverageSessionMinutes()
 end
 
 ---Build a 14-day visual timeline string
----Green block for played days, gray block for missed days
----@return string timeline Visual timeline (e.g., "■■□■■■■□■■■■■■")
-function LibsTimePlayed:BuildStreakTimeline()
-	local streaks = self.globaldb.streaks
+---@return string timeline Visual timeline
+function StreakTracker:BuildStreakTimeline()
+	local streaks = LibsTimePlayed.globaldb.streaks
 	if not streaks then
 		return ''
 	end
 
 	local parts = {}
-	-- Build from 13 days ago to today (left = oldest, right = newest)
 	for i = 13, 0, -1 do
 		local dayKey = GetDateKey(i)
 		if streaks.dailyLog[dayKey] then
-			table.insert(parts, '|cff00ff00\226\150\160|r') -- Green filled square (■ → using ■ U+25A0)
+			table.insert(parts, '|cff00ff00\226\150\160|r')
 		else
-			table.insert(parts, '|cff555555\226\150\161|r') -- Gray empty square (□ → using □ U+25A1)
+			table.insert(parts, '|cff555555\226\150\161|r')
 		end
 	end
 
@@ -230,19 +204,16 @@ function LibsTimePlayed:BuildStreakTimeline()
 end
 
 ---Get the current week streak (consecutive weeks with at least 1 play day)
----Weeks are Sunday-Saturday calendar weeks
 ---@return number weekStreak Consecutive played weeks
 ---@return table weekData Array of { weekStartDate, weekEndDate, played } for the last 5 weeks (newest first)
-function LibsTimePlayed:GetWeekStreak()
-	local streaks = self.globaldb.streaks
+function StreakTracker:GetWeekStreak()
+	local streaks = LibsTimePlayed.globaldb.streaks
 	if not streaks then
 		return 0, {}
 	end
 
-	-- Find the most recent Sunday (start of current week)
 	local now = time()
 	local today = date('*t', now)
-	-- wday: 1=Sunday, 2=Monday, ..., 7=Saturday
 	local daysSinceSunday = today.wday - 1
 	local sundayTime = now - (daysSinceSunday * 86400)
 
@@ -255,10 +226,8 @@ function LibsTimePlayed:GetWeekStreak()
 		local weekEnd = weekStart + (6 * 86400)
 		local played = false
 
-		-- Check each day in this Sun-Sat week
 		for d = 0, 6 do
 			local dayTime = weekStart + (d * 86400)
-			-- Don't count future days
 			if dayTime <= now then
 				local dayKey = date('%Y-%m-%d', dayTime)
 				if streaks.dailyLog[dayKey] then
@@ -283,7 +252,6 @@ function LibsTimePlayed:GetWeekStreak()
 		end
 	end
 
-	-- Update longest week streak if current is greater
 	if weekStreak > (streaks.longestWeekStreak or 0) then
 		streaks.longestWeekStreak = weekStreak
 	end
@@ -295,8 +263,8 @@ end
 ---@param year number e.g., 2026
 ---@param month number 1-12
 ---@return table<number, boolean> dayMap Maps day-of-month (1-31) to true if played
-function LibsTimePlayed:GetDailyLogForMonth(year, month)
-	local streaks = self.globaldb.streaks
+function StreakTracker:GetDailyLogForMonth(year, month)
+	local streaks = LibsTimePlayed.globaldb.streaks
 	local dayMap = {}
 	if not streaks then
 		return dayMap
@@ -305,7 +273,6 @@ function LibsTimePlayed:GetDailyLogForMonth(year, month)
 	for day = 1, 31 do
 		local t = time({ year = year, month = month, day = day, hour = 12 })
 		local parsed = date('*t', t)
-		-- If the month rolled over, we've passed the end of this month
 		if parsed.month ~= month then
 			break
 		end
@@ -318,8 +285,8 @@ end
 
 ---Get all streak info as a single table
 ---@return table info { currentStreak, longestStreak, longestWeekStreak, averageSessionMinutes, totalSessions, timeline }
-function LibsTimePlayed:GetStreakInfo()
-	local streaks = self.globaldb.streaks
+function StreakTracker:GetStreakInfo()
+	local streaks = LibsTimePlayed.globaldb.streaks
 	if not streaks then
 		return {
 			currentStreak = 0,
@@ -339,4 +306,25 @@ function LibsTimePlayed:GetStreakInfo()
 		totalSessions = streaks.totalSessions or 0,
 		timeline = self:BuildStreakTimeline(),
 	}
+end
+
+-- Bridge methods on main addon for backward compatibility
+function LibsTimePlayed:GetStreakInfo()
+	return self.StreakTracker:GetStreakInfo()
+end
+
+function LibsTimePlayed:GetWeekStreak()
+	return self.StreakTracker:GetWeekStreak()
+end
+
+function LibsTimePlayed:GetDailyLogForMonth(year, month)
+	return self.StreakTracker:GetDailyLogForMonth(year, month)
+end
+
+function LibsTimePlayed:GetAverageSessionMinutes()
+	return self.StreakTracker:GetAverageSessionMinutes()
+end
+
+function LibsTimePlayed:BuildStreakTimeline()
+	return self.StreakTracker:BuildStreakTimeline()
 end

@@ -1,16 +1,27 @@
 ---@class LibsTimePlayed
 local LibsTimePlayed = LibStub('AceAddon-3.0'):GetAddon('Libs-TimePlayed')
 
--- Local state
-local totalTimePlayed = 0
-local timePlayedThisLevel = 0
-local playedDataReceived = false
-local sessionStartTime = 0
+---@class LibsTimePlayed.PlayedTracker : AceModule, AceEvent-3.0, AceTimer-3.0
+local PlayedTracker = LibsTimePlayed:NewModule('PlayedTracker', 'AceEvent-3.0', 'AceTimer-3.0')
+LibsTimePlayed.PlayedTracker = PlayedTracker
 
-function LibsTimePlayed:InitializeTracker()
-	sessionStartTime = time()
+-- Faction colors for grouping display
+local FACTION_COLORS = {
+	Alliance = { r = 0.2, g = 0.4, b = 1.0 },
+	Horde = { r = 0.9, g = 0.2, b = 0.2 },
+	Neutral = { r = 0.8, g = 0.8, b = 0.8 },
+}
 
-	-- Register events
+function PlayedTracker:OnInitialize()
+	self.totalTimePlayed = 0
+	self.timePlayedThisLevel = 0
+	self.playedDataReceived = false
+	self.sessionStartTime = 0
+end
+
+function PlayedTracker:OnEnable()
+	self.sessionStartTime = time()
+
 	self:RegisterEvent('TIME_PLAYED_MSG', 'OnPlayedTimeReceived')
 	self:RegisterEvent('PLAYER_LEVEL_UP', 'OnLevelUp')
 
@@ -21,40 +32,42 @@ function LibsTimePlayed:InitializeTracker()
 	self:ScheduleRepeatingTimer('UpdateSessionDisplay', 60)
 end
 
-function LibsTimePlayed:RequestPlayedTime()
+function PlayedTracker:OnDisable()
+	self:UnregisterAllEvents()
+	self:CancelAllTimers()
+end
+
+function PlayedTracker:RequestPlayedTime()
 	RequestTimePlayed()
 end
 
 ---@param event string
 ---@param total number Total time played in seconds
 ---@param level number Time played at current level in seconds
-function LibsTimePlayed:OnPlayedTimeReceived(event, total, level)
-	totalTimePlayed = total
-	timePlayedThisLevel = level
-	playedDataReceived = true
+function PlayedTracker:OnPlayedTimeReceived(event, total, level)
+	self.totalTimePlayed = total
+	self.timePlayedThisLevel = level
+	self.playedDataReceived = true
 
-	-- Save to account-wide database
 	self:SaveCharacterData()
 
-	-- Update display
-	self:UpdateDisplay()
+	LibsTimePlayed:UpdateDisplay()
 
-	self:Log('Played time received: ' .. self.FormatTime(total, 'smart') .. ' total', 'debug')
+	LibsTimePlayed:Log('Played time received: ' .. LibsTimePlayed.FormatTime(total, 'smart') .. ' total', 'debug')
 end
 
-function LibsTimePlayed:OnLevelUp()
-	-- Request updated played time after level up
+function PlayedTracker:OnLevelUp()
 	self:ScheduleTimer('RequestPlayedTime', 1)
 end
 
-function LibsTimePlayed:UpdateSessionDisplay()
-	if playedDataReceived then
-		self:UpdateDisplay()
+function PlayedTracker:UpdateSessionDisplay()
+	if self.playedDataReceived then
+		LibsTimePlayed:UpdateDisplay()
 	end
 end
 
 ---Save current character's played data to global DB
-function LibsTimePlayed:SaveCharacterData()
+function PlayedTracker:SaveCharacterData()
 	local name = UnitName('player')
 	local realm = GetNormalizedRealmName()
 	if not name or not realm then
@@ -69,51 +82,51 @@ function LibsTimePlayed:SaveCharacterData()
 
 	local faction = UnitFactionGroup('player')
 
-	self.globaldb.characters[charKey] = {
+	LibsTimePlayed.globaldb.characters[charKey] = {
 		name = name,
 		realm = realm,
 		class = className,
 		classFile = classFile,
 		faction = faction,
 		level = level,
-		totalPlayed = totalTimePlayed,
-		levelPlayed = timePlayedThisLevel,
+		totalPlayed = self.totalTimePlayed,
+		levelPlayed = self.timePlayedThisLevel,
 		lastUpdated = time(),
 	}
 end
 
 ---Get current character's total played time
 ---@return number seconds
-function LibsTimePlayed:GetTotalPlayed()
-	return totalTimePlayed
+function PlayedTracker:GetTotalPlayed()
+	return self.totalTimePlayed
 end
 
 ---Get current character's level played time
 ---@return number seconds
-function LibsTimePlayed:GetLevelPlayed()
-	return timePlayedThisLevel
+function PlayedTracker:GetLevelPlayed()
+	return self.timePlayedThisLevel
 end
 
 ---Get session duration
 ---@return number seconds
-function LibsTimePlayed:GetSessionTime()
-	return time() - sessionStartTime
+function PlayedTracker:GetSessionTime()
+	return time() - self.sessionStartTime
 end
 
 ---Check if played data has been received
 ---@return boolean
-function LibsTimePlayed:HasPlayedData()
-	return playedDataReceived
+function PlayedTracker:HasPlayedData()
+	return self.playedDataReceived
 end
 
 ---Get all character data from global DB, grouped by class
 ---@return table<string, table[]> classGroups Characters grouped by classFile
 ---@return number accountTotal Total played time across all characters
-function LibsTimePlayed:GetAccountData()
+function PlayedTracker:GetAccountData()
 	local classGroups = {}
 	local accountTotal = 0
 
-	for charKey, data in pairs(self.globaldb.characters) do
+	for charKey, data in pairs(LibsTimePlayed.globaldb.characters) do
 		if type(data) == 'table' and data.totalPlayed and data.classFile then
 			local classFile = data.classFile
 			if not classGroups[classFile] then
@@ -144,24 +157,17 @@ function LibsTimePlayed:GetAccountData()
 	return classGroups, accountTotal
 end
 
--- Faction colors for grouping display
-local FACTION_COLORS = {
-	Alliance = { r = 0.2, g = 0.4, b = 1.0 },
-	Horde = { r = 0.9, g = 0.2, b = 0.2 },
-	Neutral = { r = 0.8, g = 0.8, b = 0.8 },
-}
-
 ---Get all character data grouped by the specified mode
 ---@param groupBy? string 'class', 'realm', or 'faction' (defaults to db.display.groupBy)
 ---@return table[] sortedGroups Array of { key, label, color, chars, total }
 ---@return number accountTotal Total played time across all characters
-function LibsTimePlayed:GetGroupedData(groupBy)
-	groupBy = groupBy or self.db.display.groupBy or 'class'
+function PlayedTracker:GetGroupedData(groupBy)
+	groupBy = groupBy or LibsTimePlayed.db.display.groupBy or 'class'
 
 	local groups = {}
 	local accountTotal = 0
 
-	for charKey, data in pairs(self.globaldb.characters) do
+	for charKey, data in pairs(LibsTimePlayed.globaldb.characters) do
 		if type(data) == 'table' and data.totalPlayed and data.classFile then
 			local groupKey, groupLabel, groupColor
 
@@ -226,4 +232,29 @@ function LibsTimePlayed:GetGroupedData(groupBy)
 	end)
 
 	return sortedGroups, accountTotal
+end
+
+-- Bridge methods on main addon for backward compatibility
+function LibsTimePlayed:GetTotalPlayed()
+	return self.PlayedTracker:GetTotalPlayed()
+end
+
+function LibsTimePlayed:GetLevelPlayed()
+	return self.PlayedTracker:GetLevelPlayed()
+end
+
+function LibsTimePlayed:GetSessionTime()
+	return self.PlayedTracker:GetSessionTime()
+end
+
+function LibsTimePlayed:HasPlayedData()
+	return self.PlayedTracker:HasPlayedData()
+end
+
+function LibsTimePlayed:GetAccountData()
+	return self.PlayedTracker:GetAccountData()
+end
+
+function LibsTimePlayed:GetGroupedData(groupBy)
+	return self.PlayedTracker:GetGroupedData(groupBy)
 end

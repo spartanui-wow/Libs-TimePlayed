@@ -1,13 +1,15 @@
 ---@class LibsTimePlayed
 local LibsTimePlayed = LibStub('AceAddon-3.0'):GetAddon('Libs-TimePlayed')
 
+---@class LibsTimePlayed.DataBroker : AceModule, AceEvent-3.0, AceTimer-3.0
+local DataBroker = LibsTimePlayed:NewModule('DataBroker')
+LibsTimePlayed.DataBroker = DataBroker
+
 local LDB = LibStub('LibDataBroker-1.1')
 local LibQTip = LibStub('LibQTip-2.0')
 
-local dataObj
-
-function LibsTimePlayed:InitializeDataBroker()
-	dataObj = LDB:NewDataObject("Lib's TimePlayed", {
+function DataBroker:OnEnable()
+	self.dataObj = LDB:NewDataObject("Lib's TimePlayed", {
 		type = 'data source',
 		text = 'Loading...',
 		icon = 'Interface\\Icons\\INV_Misc_PocketWatch_01',
@@ -22,7 +24,7 @@ function LibsTimePlayed:InitializeDataBroker()
 			end
 		end,
 		OnEnter = function(frame)
-			LibsTimePlayed:ShowTooltip(frame)
+			DataBroker:ShowTooltip(frame)
 		end,
 		OnLeave = function(frame)
 			-- Auto-hide handles cleanup via SetAutoHideDelay
@@ -92,43 +94,45 @@ function LibsTimePlayed:InitializeDataBroker()
 		end,
 	})
 
-	self.dataObject = dataObj
+	-- Store reference on main addon for MinimapButton
+	LibsTimePlayed.dataObject = self.dataObj
+
 	self:UpdateDisplay()
 end
 
-function LibsTimePlayed:ShowTooltip(anchorFrame)
+function DataBroker:ShowTooltip(anchorFrame)
 	self:HideTooltip()
-	self:BuildTooltip(anchorFrame)
+	LibsTimePlayed:BuildTooltip(anchorFrame)
 end
 
-function LibsTimePlayed:HideTooltip()
+function DataBroker:HideTooltip()
 	if self.activeTooltip then
 		LibQTip:ReleaseTooltip(self.activeTooltip)
 		self.activeTooltip = nil
 	end
 end
 
-function LibsTimePlayed:UpdateDisplay()
-	if not dataObj then
+function DataBroker:UpdateDisplay()
+	if not self.dataObj then
 		return
 	end
 
-	local format = self.db.display.format
-	local timeFormat = self.db.display.timeFormat
+	local format = LibsTimePlayed.db.display.format
+	local timeFormat = LibsTimePlayed.db.display.timeFormat
 
-	if not self:HasPlayedData() then
-		dataObj.text = 'Waiting...'
+	if not LibsTimePlayed:HasPlayedData() then
+		self.dataObj.text = 'Waiting...'
 		return
 	end
 
 	local text
 	if format == 'session' then
-		text = self.FormatTime(self:GetSessionTime(), timeFormat)
+		text = LibsTimePlayed.FormatTime(LibsTimePlayed:GetSessionTime(), timeFormat)
 	elseif format == 'level' then
-		text = self.FormatTime(self:GetLevelPlayed(), timeFormat)
+		text = LibsTimePlayed.FormatTime(LibsTimePlayed:GetLevelPlayed(), timeFormat)
 	else -- 'total'
-		text = self.FormatTime(self:GetTotalPlayed(), timeFormat)
+		text = LibsTimePlayed.FormatTime(LibsTimePlayed:GetTotalPlayed(), timeFormat)
 	end
 
-	dataObj.text = text
+	self.dataObj.text = text
 end
