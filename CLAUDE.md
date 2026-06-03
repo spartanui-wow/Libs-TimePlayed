@@ -10,7 +10,7 @@ This file provides guidance to Claude Code when working with the Libs-TimePlayed
 
 ```
 Libs-TimePlayed/
-├── Libs-TimePlayed.toc          # Interface 120000, SavedVariables: LibsTimePlayedDB
+├── Libs-TimePlayed.toc          # Interface 120005, SavedVariables: LibsTimePlayedDB
 ├── Libs-TimePlayed.lua          # AceAddon main + LibAT Logger
 ├── .pkgmeta                     # BigWigs packager config (externals for Ace3, LDB, LibDBIcon)
 ├── Core/
