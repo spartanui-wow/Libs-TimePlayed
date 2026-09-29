@@ -425,6 +425,37 @@ function Import:IsFirstTimeUser()
 	return charCount == 0 and not LibsTimePlayed.globaldb.firstTimeImportOffered
 end
 
+---How many characters a source can bring in right now (0 when it cannot be read)
+---@param sourceName string 'AltVault' or 'Altoholic'
+---@return number count
+function Import:CountImportable(sourceName)
+	local info = self:GetAvailableSources()[sourceName]
+	if not info or not info.available then
+		return 0
+	end
+	-- This source packs level, class and race into bits and needs its helper library to read them
+	if sourceName == 'Altoholic' and not (LibStub and LibStub('DataStore_bit64', true)) then
+		return 0
+	end
+	return info.characterCount or 0
+end
+
+---Import picked in the setup window. Runs when the player finishes setup.
+---@param sourceName string
+---@return boolean success
+function Import:ImportForSetup(sourceName)
+	LibsTimePlayed.globaldb.firstTimeImportOffered = true
+	self:SetMergeStrategy('newest_wins')
+	local success, imported, skipped = self:ImportFrom(sourceName)
+	if success then
+		LibsTimePlayed:Log(string.format('Setup import from %s: %d imported, %d skipped', sourceName, imported, skipped), 'info')
+		LibsTimePlayed:UpdateDisplay()
+	else
+		LibsTimePlayed:Log('Setup import from ' .. sourceName .. ' found nothing to import', 'warning')
+	end
+	return success
+end
+
 ---Perform import from a source and report result
 ---@param sourceName string Source to import from
 local function DoImport(sourceName)

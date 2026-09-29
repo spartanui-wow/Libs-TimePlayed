@@ -42,3 +42,4 @@ UI\StreakPane.lua
 UI\PopupWindow.lua
 UI\Options.lua
 UI\MinimapButton.lua
+UI\Setup.lua

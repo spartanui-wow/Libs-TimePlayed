@@ -14,6 +14,12 @@ function LibsTimePlayed:OnInitialize()
 		self.logger = LibAT.Logger.RegisterAddon('Libs - Time Played')
 	end
 
+	-- Before the Database module creates the saved data, so the setup window can tell a new install
+	-- from an existing one
+	if self.RegisterSetup then
+		self:RegisterSetup()
+	end
+
 	self:RegisterChatCommand('libstp', 'SlashCommand')
 	self:RegisterChatCommand('timeplayed', 'SlashCommand')
 end
@@ -82,6 +88,12 @@ end
 function LibsTimePlayed:CheckFirstTimeImport()
 	if not self.Import then
 		self:Log('Import module not available', 'warning')
+		return
+	end
+
+	-- The setup window offers the import now; this popup is only for clients without it
+	if self.setupRegistration then
+		self:Log('Import is offered in the setup window', 'debug')
 		return
 	end
 
