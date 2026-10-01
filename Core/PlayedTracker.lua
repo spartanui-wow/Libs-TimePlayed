@@ -158,7 +158,7 @@ function PlayedTracker:GetAccountData()
 end
 
 ---Get all character data grouped by the specified mode
----@param groupBy? string 'class', 'realm', or 'faction' (defaults to db.display.groupBy)
+---@param groupBy? string 'class', 'realm', 'faction', or 'none' (defaults to db.display.groupBy)
 ---@return table[] sortedGroups Array of { key, label, color, chars, total }
 ---@return number accountTotal Total played time across all characters
 function PlayedTracker:GetGroupedData(groupBy)
@@ -171,7 +171,11 @@ function PlayedTracker:GetGroupedData(groupBy)
 		if type(data) == 'table' and data.totalPlayed and data.classFile then
 			local groupKey, groupLabel, groupColor
 
-			if groupBy == 'realm' then
+			if groupBy == 'none' then
+				groupKey = 'all'
+				groupLabel = 'All Characters'
+				groupColor = { r = 0.8, g = 0.8, b = 0.8 }
+			elseif groupBy == 'realm' then
 				groupKey = data.realm or 'Unknown'
 				groupLabel = groupKey
 				groupColor = { r = 0.8, g = 0.8, b = 0.8 }

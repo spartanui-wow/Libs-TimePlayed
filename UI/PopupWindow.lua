@@ -537,13 +537,14 @@ function PopupWindow:CreatePopup()
 
 	-- Total text (bottom)
 	local totalText = window:CreateFontString(nil, 'OVERLAY', 'GameFontHighlight')
-	totalText:SetPoint('BOTTOMLEFT', window, 'BOTTOMLEFT', 15, 7)
+	local footer, padding = LibAT.UI.GetFooter(window)
+	totalText:SetPoint('LEFT', footer, 'LEFT', padding, 0)
 	totalText:SetJustifyH('LEFT')
 	window.totalText = totalText
 
 	-- Milestone text (bottom right)
 	local milestoneText = window:CreateFontString(nil, 'OVERLAY', 'GameFontNormalSmall')
-	milestoneText:SetPoint('BOTTOMRIGHT', window, 'BOTTOMRIGHT', -20, 7)
+	milestoneText:SetPoint('RIGHT', footer, 'RIGHT', -padding, 0)
 	milestoneText:SetPoint('LEFT', totalText, 'RIGHT', 10, 0)
 	milestoneText:SetJustifyH('RIGHT')
 	milestoneText:SetTextColor(0.7, 0.7, 0.7)
@@ -631,49 +632,7 @@ function PopupWindow:UpdatePopup()
 	end
 
 	-- Get data
-	local sortedGroups, accountTotal
-
-	if groupBy == 'none' then
-		-- Raw character list - create a single "All Characters" group
-		sortedGroups = {}
-		accountTotal = 0
-
-		local allChars = {}
-		for charKey, data in pairs(LibsTimePlayed.globaldb.characters) do
-			if type(data) == 'table' and data.totalPlayed and data.classFile then
-				local char = {
-					key = charKey,
-					name = data.name or charKey,
-					realm = data.realm or '',
-					class = data.class or data.classFile,
-					classFile = data.classFile,
-					faction = data.faction or 'Neutral',
-					level = data.level or 0,
-					totalPlayed = data.totalPlayed,
-					levelPlayed = data.levelPlayed or 0,
-					lastUpdated = data.lastUpdated or 0,
-				}
-				table.insert(allChars, char)
-				accountTotal = accountTotal + data.totalPlayed
-			end
-		end
-
-		-- Sort by totalPlayed descending
-		table.sort(allChars, function(a, b)
-			return a.totalPlayed > b.totalPlayed
-		end)
-
-		-- Create single group
-		table.insert(sortedGroups, {
-			key = 'all',
-			label = 'All Characters',
-			color = { r = 0.8, g = 0.8, b = 0.8 },
-			chars = allChars,
-			total = accountTotal,
-		})
-	else
-		sortedGroups, accountTotal = LibsTimePlayed:GetGroupedData(groupBy)
-	end
+	local sortedGroups, accountTotal = LibsTimePlayed:GetGroupedData(groupBy)
 
 	-- Find top group total for bar scaling
 	local topGroupTotal = 0

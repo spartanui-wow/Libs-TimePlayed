@@ -7,6 +7,7 @@ local GROUPBY_LABELS = {
 	class = 'Class',
 	realm = 'Realm',
 	faction = 'Faction',
+	none = 'All Characters',
 }
 
 ---@param anchorFrame Frame
@@ -70,7 +71,7 @@ function LibsTimePlayed:BuildTooltip(anchorFrame)
 		row:GetCell(2):SetText(self.FormatTime(accountTotal, 'smart')):SetColSpan(2):SetJustifyH('RIGHT'):SetTextColor(1, 1, 1)
 
 		row = tooltip:AddRow()
-		row:GetCell(1):SetText('Grouped by: ' .. GROUPBY_LABELS[groupBy]):SetTextColor(0.5, 0.5, 0.5):SetColSpan(3)
+		row:GetCell(1):SetText('Grouped by: ' .. (GROUPBY_LABELS[groupBy] or groupBy)):SetTextColor(0.5, 0.5, 0.5):SetColSpan(3)
 
 		-- Count total characters to determine if we should hide individual character details
 		local totalCharCount = 0
