@@ -409,6 +409,8 @@ function PopupWindow:CreatePopup()
 		resizable = true,
 		minWidth = 550,
 		minHeight = 200,
+		-- Keep LibAT's own look rather than the theme of whichever addon set the window kit
+		kit = 'default',
 	})
 
 	-- Create control frame for dropdown
