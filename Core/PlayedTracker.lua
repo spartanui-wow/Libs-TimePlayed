@@ -113,6 +113,18 @@ function PlayedTracker:GetSessionTime()
 	return time() - self.sessionStartTime
 end
 
+---Get played time across every saved character
+---@return number seconds
+function PlayedTracker:GetAccountTotal()
+	local total = 0
+	for _, data in pairs(LibsTimePlayed.globaldb.characters) do
+		if type(data) == 'table' and data.totalPlayed and data.classFile then
+			total = total + data.totalPlayed
+		end
+	end
+	return total
+end
+
 ---Check if played data has been received
 ---@return boolean
 function PlayedTracker:HasPlayedData()
@@ -249,6 +261,10 @@ end
 
 function LibsTimePlayed:GetSessionTime()
 	return self.PlayedTracker:GetSessionTime()
+end
+
+function LibsTimePlayed:GetAccountTotal()
+	return self.PlayedTracker:GetAccountTotal()
 end
 
 function LibsTimePlayed:HasPlayedData()

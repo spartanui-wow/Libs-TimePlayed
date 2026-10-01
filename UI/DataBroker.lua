@@ -43,6 +43,7 @@ function DataBroker:OnEnable()
 							total = 'Total Played',
 							session = 'Session Time',
 							level = 'Level Time',
+							account = 'Account Total',
 						},
 						get = function()
 							return LibsTimePlayed.db.display.format
@@ -130,6 +131,8 @@ function DataBroker:UpdateDisplay()
 		text = LibsTimePlayed.FormatTime(LibsTimePlayed:GetSessionTime(), timeFormat)
 	elseif format == 'level' then
 		text = LibsTimePlayed.FormatTime(LibsTimePlayed:GetLevelPlayed(), timeFormat)
+	elseif format == 'account' then
+		text = LibsTimePlayed.FormatTime(LibsTimePlayed:GetAccountTotal(), timeFormat)
 	else -- 'total'
 		text = LibsTimePlayed.FormatTime(LibsTimePlayed:GetTotalPlayed(), timeFormat)
 	end

@@ -26,7 +26,7 @@ local defaults = {
 	},
 	profile = {
 		display = {
-			format = 'total', -- 'total', 'session', 'level'
+			format = 'total', -- 'total', 'session', 'level', 'account'
 			timeFormat = 'smart', -- 'smart', 'full', 'hours'
 			groupBy = 'class', -- 'class', 'realm', 'faction', 'none'
 			fontSize = 10, -- popup window font size (8-16)

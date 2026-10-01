@@ -72,6 +72,7 @@ function LibsTimePlayed:RegisterSetup()
 			{ value = 'total', title = 'All my time', caption = 'Everything you played on this character.', recommended = true },
 			{ value = 'session', title = 'This session', caption = 'Time since you logged in.' },
 			{ value = 'level', title = 'This level', caption = 'Time spent on your current level.' },
+			{ value = 'account', title = 'All my characters', caption = 'Everything you played on every character.' },
 		},
 		get = function()
 			return LibsTimePlayed.db.display.format
