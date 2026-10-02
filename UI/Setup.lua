@@ -50,7 +50,9 @@ function LibsTimePlayed:RegisterSetup()
 	for _, sourceName in ipairs(IMPORT_SOURCES) do
 		sources[#sources + 1] = ImportSource(sourceName)
 	end
-	-- Hidden by the setup window when none of the sources has characters
+	-- The only question: the time it shows and how the list is grouped have good defaults and change
+	-- with a click on the bar. Hidden by the setup window when no source has characters, so most
+	-- players never see a Time Played page at all.
 	reg:AddStep({
 		id = 'import',
 		kind = 'import',
@@ -59,49 +61,5 @@ function LibsTimePlayed:RegisterSetup()
 		text = 'Another addon already knows how long you played them. This happens when you finish setup.',
 		order = 10,
 		sources = sources,
-	})
-
-	reg:AddStep({
-		id = 'format',
-		kind = 'choice',
-		name = 'What it shows',
-		title = 'Which time should it show?',
-		text = 'This is the text on your info bar. Left-click it to switch.',
-		order = 20,
-		choices = {
-			{ value = 'total', title = 'All my time', caption = 'Everything you played on this character.', recommended = true },
-			{ value = 'session', title = 'This session', caption = 'Time since you logged in.' },
-			{ value = 'level', title = 'This level', caption = 'Time spent on your current level.' },
-			{ value = 'account', title = 'All my characters', caption = 'Everything you played on every character.' },
-		},
-		get = function()
-			return LibsTimePlayed.db.display.format
-		end,
-		set = function(value)
-			LibsTimePlayed.db.display.format = value
-			LibsTimePlayed:UpdateDisplay()
-		end,
-	})
-
-	reg:AddStep({
-		id = 'groupBy',
-		kind = 'choice',
-		name = 'Your list',
-		title = 'How should your characters be grouped?',
-		text = 'This is for the list in the tooltip and the window.',
-		order = 30,
-		choices = {
-			{ value = 'class', title = 'By class', caption = 'Characters of the same class together.', recommended = true },
-			{ value = 'realm', title = 'By realm', caption = 'Characters on the same realm together.' },
-			{ value = 'faction', title = 'By faction', caption = 'Alliance and Horde apart.' },
-			{ value = 'none', title = 'One list', caption = 'All your characters in one list.' },
-		},
-		get = function()
-			return LibsTimePlayed.db.display.groupBy
-		end,
-		set = function(value)
-			LibsTimePlayed.db.display.groupBy = value
-			LibsTimePlayed:UpdateDisplay()
-		end,
 	})
 end
