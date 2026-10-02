@@ -60,6 +60,25 @@ function LibsTimePlayed:RegisterSetup()
 		title = 'Bring in your other characters?',
 		text = 'Another addon already knows how long you played them. This happens when you finish setup.',
 		order = 10,
+		-- Nothing to ask once Time Played has data of its own: an import already ran, the import was
+		-- already offered, or it already knows more than one character
+		hidden = function()
+			local db = LibsTimePlayed.globaldb
+			if not db then
+				return false
+			end
+			if db.firstTimeImportOffered or (db.importHistory and #db.importHistory > 0) then
+				return true
+			end
+			local count = 0
+			for _ in pairs(db.characters or {}) do
+				count = count + 1
+				if count > 1 then
+					return true
+				end
+			end
+			return false
+		end,
 		sources = sources,
 	})
 end
